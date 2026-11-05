@@ -50,7 +50,7 @@ function ciz() {
   if (ana) $('#baslik').innerHTML = '<span class="ust-ad">Üç Nur</span><span class="ust-alt">Kur\'an, Hadis ve Zikirde Buluşalım!</span>';
   else $('#baslik').textContent = top.baslik;
   $('#geri').hidden = yigin.length < 2; $('#ust-sag').innerHTML = '';
-  const m = $('#icerik'); m.innerHTML = ''; m.scrollTop = 0; top.fn(m);
+  const m = $('#icerik'); m.onclick = null; m.style.paddingBottom = ''; m.innerHTML = ''; m.scrollTop = 0; top.fn(m);
 }
 let temizlik = []; // sayfa değişince durdurulacak zamanlayıcılar/dinleyiciler
 
@@ -59,12 +59,18 @@ let kuranP = null;
 function kuran() { return kuranP || (kuranP = fetch('data/kuran.json').then(r => r.json())); }
 
 // ---------- Namaz vakitleri ----------
+// Konum: { tip: 'il', plaka } | { tip: 'ilce', plaka, ilce, lat, lng } | { tip: 'gps', lat, lng }
 function konum() { return oku('konum', { tip: 'il', plaka: 34 }); }
-function konumAdi(k = konum()) { return k.tip === 'il' ? ILLER[k.plaka - 1][0] : (k.ad || 'Konumum'); }
+function konumAdi(k = konum()) {
+  if (k.tip === 'il') return ILLER[k.plaka - 1][0];
+  if (k.tip === 'ilce') return k.ilce === 'Merkez' ? ILLER[k.plaka - 1][0] + ' Merkez' : k.ilce + ', ' + ILLER[k.plaka - 1][0];
+  return k.ad || 'Konumum';
+}
 function konumKoord(k = konum()) { return k.tip === 'il' ? { lat: ILLER[k.plaka - 1][1], lng: ILLER[k.plaka - 1][2] } : { lat: k.lat, lng: k.lng }; }
-function saatDilimi(k = konum()) { return k.tip === 'il' ? 'Europe/Istanbul' : undefined; }
+function saatDilimi(k = konum()) { return k.tip === 'gps' ? undefined : 'Europe/Istanbul'; }
 function saatYaz(d, k) { return d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: saatDilimi(k) }); }
-function diyanetVeri(k = konum()) { return k.tip === 'il' ? oku('dv.' + k.plaka, null) : null; }
+function veriAnahtari(k = konum()) { return k.tip === 'il' ? 'dv.' + k.plaka : k.tip === 'ilce' ? 'dvi.' + k.plaka + '.' + k.ilce : null; }
+function diyanetVeri(k = konum()) { const a = veriAnahtari(k); return a ? oku(a, null) : null; }
 // Diyanet "HH:MM" (Türkiye saati, UTC+3) -> Date
 function trSaat(gun, hm) { const [y, m, d] = gun.split('-').map(Number), [h, mi] = hm.split(':').map(Number); return new Date(Date.UTC(y, m - 1, d, h - 3, mi)); }
 // Belirli bir günün altı vakti: önce Diyanet verisi, yoksa hesaplama (adhan, Türkiye yöntemi)
@@ -109,15 +115,39 @@ function vakitAraligi(simdi = new Date()) {
 }
 function selam(d = new Date()) { const h = d.getHours(); return h < 5 ? 'Hayırlı geceler' : h < 11 ? 'Hayırlı sabahlar' : h < 17 ? 'Hayırlı günler' : h < 22 ? 'Hayırlı akşamlar' : 'Hayırlı geceler'; }
 function kalan(ms) { const s = Math.max(0, Math.floor(ms / 1000)); return [Math.floor(s / 3600), Math.floor(s % 3600 / 60), s % 60].map(x => String(x).padStart(2, '0')).join(':'); }
+const HICRI_AYLAR = ['Muharrem', 'Safer', 'Rebîülevvel', 'Rebîülâhir', 'Cemâziyelevvel', 'Cemâziyelâhir', 'Recep', 'Şâban', 'Ramazan', 'Şevval', 'Zilkade', 'Zilhicce'];
+// İlçe seçilince: AlAdhan'dan o ilçenin koordinatına göre bu yıl + gelecek yıl (Diyanet yöntemi, Diyanet hicri takvimi)
+async function ilceVerisi(k) {
+  const y = new Date().getFullYear(), alt = ymd(new Date(Date.now() - 7 * 864e5));
+  const out = { il: konumAdi(k), kaynak: 'AlAdhan · Diyanet hesaplama yöntemi', gunler: {}, hicri: {}, hicriNo: {} };
+  for (const yy of [y, y + 1]) {
+    let g;
+    try {
+      const q = new URLSearchParams({ latitude: k.lat, longitude: k.lng, method: 13, calendarMethod: 'DIYANET', timezonestring: 'Europe/Istanbul', annual: 'true' });
+      const r = await fetch(`https://api.aladhan.com/v1/calendar/${yy}?${q}`); if (!r.ok) throw new Error(r.status);
+      const j = await r.json(); if (j.code !== 200) throw new Error(j.code);
+      g = Array.isArray(j.data) ? j.data : Object.values(j.data).flat();
+    } catch (e) { if (yy === y) throw e; continue; }
+    for (const d of g) {
+      const [dd, mm, yyyy] = d.date.gregorian.date.split('-'), t = `${yyyy}-${mm}-${dd}`; if (t < alt) continue;
+      const tm = d.timings, h = d.date.hijri;
+      out.gunler[t] = [tm.Fajr, tm.Sunrise, tm.Dhuhr, tm.Asr, tm.Maghrib, tm.Isha].map(x => String(x).trim().slice(0, 5));
+      out.hicriNo[t] = [+h.day, +h.month.number, +h.year]; out.hicri[t] = `${+h.day} ${HICRI_AYLAR[h.month.number - 1]} ${h.year}`;
+    }
+  }
+  return Object.keys(out.gunler).length ? out : null;
+}
 async function diyanetGuncelle(zorla) {
-  const k = konum(); if (k.tip !== 'il') return false;
-  const son = oku('dvZaman.' + k.plaka, 0), dv = diyanetVeri(k);
-  const bugunVar = dv && dv.gunler && dv.gunler[ymd(new Date())];
-  if (!zorla && bugunVar && Date.now() - son < 12 * 3600e3) return false;
+  const k = konum(), an = veriAnahtari(k); if (!an) return false;
+  const zk = k.tip === 'il' ? 'dvZaman.' + k.plaka : an + '.z', son = oku(zk, 0), dv = diyanetVeri(k);
+  const bugunVar = dv && dv.gunler && dv.gunler[ymd(new Date())] && (k.tip === 'il' || dv.gunler[ymd(new Date(Date.now() + 40 * 864e5))]);
+  if (!zorla && bugunVar && Date.now() - son < (k.tip === 'il' ? 12 : 24 * 20) * 3600e3) return false;
   try {
-    const r = await fetch(VAKIT_URL + k.plaka + '.json', { cache: 'no-store' }); if (!r.ok) return false;
-    const j = await r.json(); if (!j.gunler) return false;
-    yaz('dv.' + k.plaka, j); yaz('dvZaman.' + k.plaka, Date.now()); return true;
+    let j;
+    if (k.tip === 'il') { const r = await fetch(VAKIT_URL + k.plaka + '.json', { cache: 'no-store' }); if (!r.ok) return false; j = await r.json(); }
+    else j = await ilceVerisi(k);
+    if (!j || !j.gunler) return false;
+    yaz(an, j); yaz(zk, Date.now()); return true;
   } catch (e) { return false; }
 }
 async function diniGunGuncelle() {
@@ -149,15 +179,17 @@ function bildirimAyar() { return oku('bildirim', { acik: false, vakitler: [true,
 async function bildirimPlanla() {
   const LN = eklenti('LocalNotifications'); if (!NATIVE || !LN) return;
   try {
-    const bekleyen = await LN.getPending(); const eski = (bekleyen.notifications || []).filter(n => n.id >= 1000 && n.id < 3000);
+    const bekleyen = await LN.getPending(); const eski = (bekleyen.notifications || []).filter(n => n.id >= 1000 && n.id < 4000);
     if (eski.length) await LN.cancel({ notifications: eski.map(n => ({ id: n.id })) });
-    const a = bildirimAyar(); if (!a.acik) return;
+    let izin = false; try { izin = (await LN.checkPermissions()).display === 'granted'; } catch (e) {}
+    if (!izin) return;
+    const a = bildirimAyar();
     const liste = [], simdi = new Date(), ad = konumAdi();
-    for (let g = 0; g < 7 && liste.length < 50; g++) {
+    for (let g = 0; a.acik && g < 8 && liste.length < 46; g++) {
       const gun = new Date(simdi); gun.setDate(gun.getDate() + g);
       gunVakitleri(gun).v.forEach((t, i) => {
         if (!a.vakitler[i]) return;
-        const at = new Date(t.getTime() - a.once * 60e3); if (at <= simdi) return;
+        const at = new Date(t.getTime() - a.once * 60e3); if (at <= simdi || liste.length >= 46) return;
         const vakitAd = VAKIT_ADLARI[i];
         liste.push({
           id: 1000 + g * 10 + i,
@@ -167,12 +199,25 @@ async function bildirimPlanla() {
         });
       });
     }
+    // Günün hadisi: öğle ezanından 30 dakika önce (ana sayfadaki hadisle aynı)
+    if (oku('hadisBildirim', true)) for (let g = 0; g < 7; g++) {
+      const gun = new Date(simdi); gun.setDate(gun.getDate() + g);
+      const at = new Date(gunVakitleri(gun).v[2].getTime() - 30 * 60e3); if (at <= simdi) continue;
+      const h = HADISLER[gunNo(gun) % HADISLER.length], metin = `${h[1]} (${h[2]})`;
+      liste.push({ id: 3000 + g, title: 'Günün Hadisi', body: metin, largeBody: metin, schedule: { at, allowWhileIdle: true }, extra: { git: 'hadis' } });
+    }
+    // Cuma gecesi: perşembe akşam ezanından 20 dakika sonra
+    if (oku('cumaBildirim', true)) for (let g = 0, n = 0; g < 15 && n < 2; g++) {
+      const gun = new Date(simdi); gun.setDate(gun.getDate() + g); if (gun.getDay() !== 4) continue;
+      const at = new Date(gunVakitleri(gun).v[4].getTime() + 20 * 60e3); if (at <= simdi) continue;
+      liste.push({ id: 3100 + n++, title: 'Bu gece Cuma gecesi 🌙', body: 'Yâsîn, Tebâreke, Amme ve Cuma sûrelerini birlikte okuyalım. Okuyamıyorsan uygulamadan dinleyebilirsin.', schedule: { at, allowWhileIdle: true }, extra: { git: 'cuma' } });
+    }
     // Kandil ve bayramlar için o günün sabahı 10:00'da hatırlatma
     yaklasanGunler(7).filter(x => x.tur !== 'gun' || /Ramazan Başlangıcı|Aşure|Hicrî/.test(x.ad)).slice(0, 5).forEach((x, i) => {
       const [y, mo, d] = x.tarih.split('-').map(Number), at = new Date(y, mo - 1, d, 10, 0); if (at <= simdi) return;
       liste.push({ id: 2000 + i, title: x.ad, body: x.tur === 'kandil' ? `Bu akşam ${x.ad}. Kandiliniz mübarek olsun.` : `Bugün ${x.ad}.`, schedule: { at, allowWhileIdle: true } });
     });
-    if (liste.length) await LN.schedule({ notifications: liste.slice(0, 55) });
+    if (liste.length) await LN.schedule({ notifications: liste.slice(0, 62) });
   } catch (e) { console.warn('bildirim', e); }
 }
 async function bildirimIzni() {
@@ -221,9 +266,20 @@ function sBugun(m) {
       <button id="h-kible"><span class="h-ikon">🧭</span><b>Kıble</b><span>Pusula</span></button>
       <button id="h-imsakiye"><span class="h-ikon">🌙</span><b>İmsakiye</b><span>Ramazan</span></button>
     </div>
+    <div id="cuma-kart"></div>
+    <div class="kategori-baslik">Öğren ve yaşa</div>
+    <div class="kesfet">
+      <button id="k-namaz"><span class="k-ikon">🕌</span><b>Namaz Kılınışı</b><small>Resimli anlatım</small></button>
+      <button id="k-dua"><span class="k-ikon">🤲</span><b>Namaz Duaları</b><small>Dinle, ezberle</small></button>
+      <button id="k-elifba"><span class="k-ikon k-ar">اب</span><b>Elif-Bâ</b><small>Sesli öğren</small></button>
+      <button id="k-kaza"><span class="k-ikon">📋</span><b>Kaza Takvimi</b><small id="k-kaza-alt">Namazlarını işaretle</small></button>
+      <button id="k-cami"><span class="k-ikon">📍</span><b>Yakın Camiler</b><small>Yol tarifi</small></button>
+      <button id="k-cuma"><span class="k-ikon">🌙</span><b>Cuma Gecesi</b><small>Yâsîn ve sûreler</small></button>
+    </div>
     <div id="ozel-gun"></div>
     <div class="kart ayet-kart"><div class="sus">۞</div><h2>Günün Ayeti</h2><div id="ga">…</div></div>
-    <div class="kart hadis-kart"><h2>Günün Hadisi</h2><div class="hadis-metin" id="gh"></div></div>
+    <div class="kart hadis-kart"><h2>Günün Hadisi</h2><div class="hadis-metin" id="gh"></div><button class="hadis-bil" id="gh-bil" hidden>🔔 Her gün öğleden önce bildir</button></div>
+    <button class="kart olum-mini" id="olum"><div class="olum-ust">🌿 Ölümü Hatırla</div><p id="olum-soz"></p><div class="olum-alt">Kabir sualleri: öğren, ezberle, yaşa ›</div></button>
     <div class="kart dua-kart">
       <p class="soluk">Bu uygulama Allah rızası için hazırlandı.</p>
       <p>Hazırlayanlar, aileleri ve efradı için bir dua etmeniz yeter. 🤲</p>
@@ -255,8 +311,29 @@ function sBugun(m) {
   $('#h-zikir').onclick = () => sekme('zikir');
   $('#h-kible').onclick = () => sayfa(sKible, 'Kıble');
   $('#h-imsakiye').onclick = () => sayfa(sImsakiye, 'Ramazan İmsakiyesi');
+  $('#k-namaz').onclick = () => sayfa(sNamazKilinis, 'Namaz Nasıl Kılınır');
+  $('#k-dua').onclick = () => sayfa(sDualar, 'Namaz Duaları');
+  $('#k-elifba').onclick = () => sayfa(sElifba, 'Elif-Bâ');
+  $('#k-kaza').onclick = () => sayfa(sKaza, 'Kaza Takvimi');
+  $('#k-cami').onclick = () => sayfa(sCamiler, 'Yakındaki Camiler');
+  $('#k-cuma').onclick = () => sayfa(sCumaGecesi, 'Cuma Gecesi');
+  $('#olum').onclick = () => sayfa(sKabir, 'Ölümü Hatırla');
+  const kz = kazaVeri(); if (kz) { const [kl] = kz.gun[ymd(bugun)] || [0]; $('#k-kaza-alt').textContent = `Bugün ${[0, 1, 2, 3, 4, 5].filter(v => kl >> v & 1).length}/6 kılındı`; }
+  const [os, ok_] = OLUM_HATIRLA[gn % OLUM_HATIRLA.length]; $('#olum-soz').innerHTML = `“${esc(os)}” <span class="kaynak">${esc(ok_)}</span>`;
+  // Cuma gecesi kartı (perşembe ve cuma)
+  const cg = cumaGecesiMi(bugun);
+  if (cg) {
+    const okunan = (oku('cumaOkunan.' + haftaAnahtari(bugun), []) || []).length;
+    $('#cuma-kart').innerHTML = `<button class="kart cuma-ana" id="cg"><div><b>${cg === 'cuma' ? 'Hayırlı Cumalar 🌙' : cg === 'gece' ? 'Bu gece Cuma gecesi 🌙' : 'Bu akşam Cuma gecesi 🌙'}</b>
+      <span>Yâsîn, Tebâreke, Amme ve Cuma sûrelerini birlikte okuyalım · ${okunan}/4</span></div><span class="cg-ok">Oku · Dinle ›</span></button>`;
+    $('#cg').onclick = () => sayfa(sCumaGecesi, 'Cuma Gecesi');
+  }
   const h = HADISLER[gn % HADISLER.length];
   $('#gh').innerHTML = `${esc(h[1])}<div class="kaynak">${esc(h[2])}</div>`;
+  // Hadis bildirimi: izin yoksa küçük bir davet göster
+  const LNb = eklenti('LocalNotifications');
+  if (NATIVE && LNb && oku('hadisBildirim', true)) LNb.checkPermissions().then(p => { const b = $('#gh-bil'); if (b && p.display !== 'granted') b.hidden = false; }).catch(() => {});
+  $('#gh-bil').onclick = async () => { if (await bildirimIzni()) { yaz('hadisBildirim', true); await bildirimPlanla(); $('#gh-bil').hidden = true; toast('Her gün öğle ezanından 30 dakika önce günün hadisi gelecek'); } else toast('Bildirim izni verilmedi. Telefon ayarlarından açabilirsiniz.'); };
   const [s, a] = SECME_AYETLER[gn % SECME_AYETLER.length];
   kuran().then(K => {
     const sure = K[s - 1], ay = sure.v[a - 1];
@@ -311,23 +388,33 @@ function sIsaretler(m) {
 }
 
 // ---------- Kur'an: okuyucu ----------
-function sOku(m, n, hedefAyet) {
+function sOku(m, n, hedefAyet, o = {}) {
   kuran().then(K => {
     const s = K[n - 1]; let gor = oku('gorunum', { ar: true, tr: true });
+    // Sesli dinleme (hafız kıraati). Cuma gecesi listesinden gelindiyse bitince işaretlenir, istenirse sıradakine geçilir.
+    const calar = kuranCalar(m, n, s.v.length, { bitti: () => {
+      if (!o.cuma) { toast(`${s.ad} Sûresi tamamlandı`); return; }
+      cumaOkundu(n); const j = CUMA_SURELERI.findIndex(x => x[0] === n), sonraki = CUMA_SURELERI[j + 1];
+      if (o.zincir && sonraki) { toast(`Sıradaki: ${sonraki[1]}`); yigin.pop(); sayfa(mm => sOku(mm, sonraki[0], 1, o), K[sonraki[0] - 1].ad); }
+      else toast(`${s.ad} Sûresi tamamlandı. Allah kabul etsin.`, 3000);
+    } });
     $('#baslik').textContent = `${n}. ${s.ad}`;
     const isr = () => oku('isaretler', []);
     const isaretli = a => isr().some(x => x[0] === n && x[1] === a);
     const ayetHtml = (v, i) => `<div class="ayet" id="a${i + 1}" data-a="${i + 1}">
-        <div class="ayet-ust"><span class="no">${i + 1}</span><span class="bosluk"></span><button data-isr="${i + 1}" class="${isaretli(i + 1) ? 'isaretli' : ''}" aria-label="Yer imi">${isaretli(i + 1) ? '★' : '☆'}</button></div>
+        <div class="ayet-ust"><span class="no">${i + 1}</span><span class="bosluk"></span><button data-oyna="${i + 1}" aria-label="Buradan dinle">▶</button><button data-isr="${i + 1}" class="${isaretli(i + 1) ? 'isaretli' : ''}" aria-label="Yer imi">${isaretli(i + 1) ? '★' : '☆'}</button></div>
         ${gor.ar ? `<div class="ar">${esc(v[0])}</div>` : ''}${gor.tr ? `<div class="meal">${esc(v[1])}</div>` : ''}</div>`;
     const yenile = () => {
       m.innerHTML = `<div class="okuyucu-ayar">
           <button class="cip ${gor.ar ? 'acik' : ''}" id="g-ar">Arapça</button><button class="cip ${gor.tr ? 'acik' : ''}" id="g-tr">Meal</button>
-          <button class="cip" id="b-k">A−</button><button class="cip" id="b-b">A+</button></div>
+          <button class="cip" id="b-k">A−</button><button class="cip" id="b-b">A+</button><button class="cip dinle-cip" id="g-dinle">▶ Dinle</button></div>
         ${n !== 1 && n !== 9 && gor.ar ? '<div class="besmele">بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيمِ</div>' : ''}
         ${s.v.map(ayetHtml).join('')}
         <div class="sure-gecis">${n > 1 ? `<button id="onceki">‹ ${esc(K[n - 2].ad)}</button>` : '<span></span>'}${n < 114 ? `<button id="sonraki">${esc(K[n].ad)} ›</button>` : ''}</div>
-        <p class="kaynak" style="text-align:center">Meal: Diyanet İşleri Başkanlığı · Metin: Tanzil.net</p>`;
+        ${o.cuma ? `<button class="btn ana tam" id="cuma-ok" style="margin-top:12px">✓ ${esc(s.ad)} Sûresini okudum</button>` : ''}
+        <p class="kaynak" style="text-align:center">Meal: Diyanet İşleri Başkanlığı · Metin: Tanzil.net · Ses: EveryAyah.com</p>`;
+      $('#g-dinle').onclick = () => calar.basla(enUstAyet());
+      if ($('#cuma-ok')) $('#cuma-ok').onclick = () => { cumaOkundu(n); titres('HEAVY'); toast('Allah kabul etsin 🤲'); geri(); };
       $('#g-ar').onclick = () => { gor = { ...gor, ar: !gor.ar }; if (!gor.ar && !gor.tr) gor.tr = true; yaz('gorunum', gor); konumKoru(yenile); };
       $('#g-tr').onclick = () => { gor = { ...gor, tr: !gor.tr }; if (!gor.ar && !gor.tr) gor.ar = true; yaz('gorunum', gor); konumKoru(yenile); };
       $('#b-k').onclick = () => { yaz('arBoyut', Math.max(20, oku('arBoyut', 28) - 2)); yaz('trBoyut', Math.max(13, oku('trBoyut', 16) - 1)); boyutUygula(); };
@@ -347,6 +434,7 @@ function sOku(m, n, hedefAyet) {
     };
     temizlik.push(() => gozlemci && gozlemci.disconnect());
     m.onclick = e => {
+      const p = e.target.closest('button[data-oyna]'); if (p) { calar.basla(+p.dataset.oyna); return; }
       const b = e.target.closest('button[data-isr]'); if (!b) return;
       const a = +b.dataset.isr; let l = isr();
       if (l.some(x => x[0] === n && x[1] === a)) { l = l.filter(x => !(x[0] === n && x[1] === a)); b.textContent = '☆'; b.classList.remove('isaretli'); toast('Yer imi kaldırıldı'); }
@@ -356,6 +444,7 @@ function sOku(m, n, hedefAyet) {
     yenile();
     if (hedefAyet > 1) { const el = $('#a' + hedefAyet, m); if (el) { m.scrollTop = el.offsetTop - m.offsetTop - 8; el.classList.add('vurgulu'); setTimeout(() => el.classList.remove('vurgulu'), 1800); } }
     yaz('sonOkunan', { s: n, a: hedefAyet || 1 });
+    if (o.dinle) calar.basla(1);
   });
 }
 
@@ -406,7 +495,9 @@ function sVakitler(m) {
       <div class="kart"><h2>Kerahat vakitleri (yaklaşık)</h2>${kerahatler(bugun).map(x => `<div class="ayar-satir" style="margin:4px 0"><span>${x.ad}</span><b>${saatYaz(x.bas)} – ${saatYaz(x.bit)}</b></div>`).join('')}<p class="soluk" style="margin:8px 0 0">Bu vakitlerde namaz kılmak mekruhtur. Süreler yaklaşık ${KERAHAT_DK} dakika olarak gösterilir.</p></div>
       <p class="soluk" style="margin:-4px 4px 12px">${gv.kaynak !== 'Hesaplama' ? 'Diyanet hesaplama yöntemi · AlAdhan' : 'İnternetsiz hesaplandı (Diyanet yöntemi). İnternete bağlanınca güncel veri yüklenir.'}</p>
       <div class="kart"><h2>Konum</h2>
-        <select class="sec" id="il"><option value="">Konumum (GPS)</option>${ILLER.map((x, i) => `<option value="${i + 1}" ${k.tip === 'il' && k.plaka === i + 1 ? 'selected' : ''}>${esc(x[0])}</option>`).join('')}</select>
+        <select class="sec" id="il"><option value="" ${k.tip === 'gps' ? 'selected' : ''}>Konumum (GPS)</option>${ILLER.map((x, i) => `<option value="${i + 1}" ${k.plaka === i + 1 ? 'selected' : ''}>${esc(x[0])}</option>`).join('')}</select>
+        ${k.plaka ? `<select class="sec" id="ilce" style="margin-top:8px"><option value="">İl geneli (il merkezi vakti)</option>${ILCELER[k.plaka - 1].slice().sort((a, b) => a[0].localeCompare(b[0], 'tr')).map(x => `<option value="${esc(x[0])}" ${k.tip === 'ilce' && k.ilce === x[0] ? 'selected' : ''}>${esc(x[0])}</option>`).join('')}</select>
+        <p class="soluk" style="margin:6px 2px 0">Geniş illerde vakitler ilçeden ilçeye birkaç dakika değişir; ilçenizi seçin.</p>` : ''}
         <button class="btn tam" id="gps">📍 Konumumu bul</button></div>
       <div class="kart"><h2>Ezan bildirimi</h2>
         <div class="ayar-satir"><span>Vakit girince haber ver</span><button class="anahtar ${ba.acik ? 'acik' : ''}" id="b-ac"></button></div>
@@ -417,10 +508,13 @@ function sVakitler(m) {
         ${hafta.map(([d, v]) => `<tr><th>${d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}</th>${v.map(t => `<td>${saatYaz(t)}</td>`).join('')}</tr>`).join('')}</table></div>
       <button class="btn tam" id="imsakiye">🌙 Ramazan imsakiyesi</button>
       <button class="btn tam" id="dinigun">📅 Dini günler ve kandiller</button>
-      <button class="btn tam" id="kible">🧭 Kıble yönü</button>`;
+      <button class="btn tam" id="kible">🧭 Kıble yönü</button>
+      <button class="btn tam" id="camiler">📍 Yakındaki camiler</button>`;
     const say = () => { const x = siradakiVakit(); const el = $('#vs'); if (el) el.textContent = kalan(x.t - new Date()); };
     say(); const z = setInterval(say, 1000); temizlik.push(() => clearInterval(z));
-    $('#il').onchange = async e => { if (!e.target.value) { $('#gps').click(); return; } yaz('konum', { tip: 'il', plaka: +e.target.value }); ciz2(); if (await diyanetGuncelle(true)) ciz2(); bildirimPlanla(); };
+    const yenile = async () => { ciz2(); const ok = await diyanetGuncelle(true); if (yigin[yigin.length - 1].fn !== sVakitler) return; if (ok) ciz2(); else if (konum().tip === 'ilce' && !diyanetVeri()) toast('İlçe vakitleri indirilemedi; internetsiz hesaplanıyor.'); bildirimPlanla(); };
+    $('#il').onchange = e => { if (!e.target.value) { $('#gps').click(); return; } yaz('konum', { tip: 'il', plaka: +e.target.value }); yenile(); };
+    if ($('#ilce')) $('#ilce').onchange = e => { const p = konum().plaka, ad = e.target.value; if (!ad) yaz('konum', { tip: 'il', plaka: p }); else { const x = ILCELER[p - 1].find(z => z[0] === ad); yaz('konum', { tip: 'ilce', plaka: p, ilce: ad, lat: x[1], lng: x[2] }); } yenile(); };
     $('#gps').onclick = () => konumBul(async () => { ciz2(); if (await diyanetGuncelle(true)) ciz2(); bildirimPlanla(); });
     $('#b-ac').onclick = async () => { const a = bildirimAyar(); if (!a.acik && !(await bildirimIzni())) { toast('Bildirim izni verilmedi. Telefon ayarlarından açabilirsiniz.'); return; }
       a.acik = !a.acik; yaz('bildirim', a); await bildirimPlanla(); toast(a.acik ? 'Ezan bildirimleri açıldı' : 'Ezan bildirimleri kapatıldı'); ciz2(); };
@@ -430,6 +524,7 @@ function sVakitler(m) {
       const i = +b.dataset.z; a.vakitler[i] = !a.vakitler[i]; yaz('bildirim', a); bildirimPlanla(); toast(`${VAKIT_ADLARI[i]} bildirimi ${a.vakitler[i] ? 'açık' : 'kapalı'}`); ciz2(); });
     const ta = $('#tam-alarm'); if (ta) ta.onclick = async () => { const LN = eklenti('LocalNotifications'); try { await LN.changeExactNotificationSetting(); } catch (e) { toast('Bu cihazda gerekmiyor'); } };
     $('#kible').onclick = () => sayfa(sKible, 'Kıble');
+    $('#camiler').onclick = () => sayfa(sCamiler, 'Yakındaki Camiler');
     $('#imsakiye').onclick = () => sayfa(sImsakiye, 'Ramazan İmsakiyesi');
     $('#dinigun').onclick = () => sayfa(sDiniGunler, 'Dini Günler');
   };
@@ -441,8 +536,9 @@ function konumBul(sonra) {
   toast('Konum alınıyor…', 6000);
   navigator.geolocation.getCurrentPosition(p => {
     const lat = p.coords.latitude, lng = p.coords.longitude;
-    let en = 0, ed = 1e9; ILLER.forEach((x, i) => { const d = mesafe(lat, lng, x[1], x[2]); if (d < ed) { ed = d; en = i; } });
-    if (ed < 120) { yaz('konum', { tip: 'il', plaka: en + 1 }); toast('Konum: ' + ILLER[en][0]); }
+    // En yakın ilçe (Türkiye içindeyse ilçe vakitleri kullanılır)
+    let en = null, ed = 1e9; ILCELER.forEach((l, p) => l.forEach(x => { const d = mesafe(lat, lng, x[1], x[2]); if (d < ed) { ed = d; en = [p + 1, x]; } }));
+    if (ed < 35) { yaz('konum', { tip: 'ilce', plaka: en[0], ilce: en[1][0], lat: en[1][1], lng: en[1][2] }); toast('Konum: ' + konumAdi()); }
     else { yaz('konum', { tip: 'gps', lat, lng, ad: 'Konumum' }); toast('Konumunuza göre hesaplanıyor'); }
     sonra && sonra();
   }, () => toast('Konum izni verilmedi. Listeden il seçebilirsiniz.'), { timeout: 15000, maximumAge: 6e5, enableHighAccuracy: false });
@@ -486,7 +582,19 @@ function sKible(m) {
 // ---------- Daha ----------
 function sDaha(m) {
   const satir = (id, ikon, b, a) => `<button id="${id}"><span class="no">${ikon}</span><span class="orta"><b>${b}</b><span class="soluk">${a}</span></span><span class="soluk">›</span></button>`;
-  m.innerHTML = `<div class="liste">
+  m.innerHTML = `<div class="kategori-baslik" style="margin-top:4px">Öğren</div><div class="liste">
+      ${satir('d-namaz', '🕌', 'Namaz Nasıl Kılınır', 'Resimli, adım adım · abdest')}
+      ${satir('d-dua', '🤲', 'Namaz Duaları ve Sûreler', 'Dinle, ezberle')}
+      ${satir('d-elifba', 'ا', 'Elif-Bâ', 'Harfler ve harekeler, sesli')}
+      ${satir('d-kogren', '📖', 'Kur\'an Okumayı Öğren', 'Hafızı dinle, tekrar et')}
+      ${satir('d-kabir', '🌿', 'Ölümü Hatırla', 'Kabir sualleri')}
+    </div>
+    <div class="kategori-baslik">İbadet</div><div class="liste">
+      ${satir('d-kaza', '📋', 'Kaza Takvimi', 'Kılınan ve kaza namazları')}
+      ${satir('d-cuma', '🌙', 'Cuma Gecesi', 'Yâsîn, Tebâreke, Amme, Cuma')}
+      ${satir('d-cami', '📍', 'Yakındaki Camiler', 'Haritada yol tarifi')}
+    </div>
+    <div class="liste">
       ${satir('d-hadis', 'ﷺ', 'Hadis-i Şerifler', `${HADISLER.length} seçme hadis`)}
       ${satir('d-esma', '۩', 'Esmâü\'l-Hüsnâ', 'Allah\'ın 99 güzel ismi')}
       ${satir('d-imsakiye', '🌙', 'Ramazan İmsakiyesi', 'Sahur ve iftar vakitleri')}
@@ -504,6 +612,14 @@ function sDaha(m) {
       <p>Uygulama tamamen ücretsizdir ve kendiliğinden reklam göstermez.</p>
       <p class="soluk">Sunucu ve mağaza masraflarına katkı olsun isterseniz kısa bir reklam izleyebilirsiniz. Reklam yalnızca siz bu butona bastığınızda açılır.</p>
       <button class="btn ana tam" id="destek">Reklam izleyerek destek ol</button></div>`;
+  $('#d-namaz').onclick = () => sayfa(sOgren, 'Namaz ve Kur\'an Öğren');
+  $('#d-dua').onclick = () => sayfa(sDualar, 'Namaz Duaları');
+  $('#d-elifba').onclick = () => sayfa(sElifba, 'Elif-Bâ');
+  $('#d-kogren').onclick = () => sayfa(sKuranOgren, 'Kur\'an Okumayı Öğren');
+  $('#d-kabir').onclick = () => sayfa(sKabir, 'Ölümü Hatırla');
+  $('#d-kaza').onclick = () => sayfa(sKaza, 'Kaza Takvimi');
+  $('#d-cuma').onclick = () => sayfa(sCumaGecesi, 'Cuma Gecesi');
+  $('#d-cami').onclick = () => sayfa(sCamiler, 'Yakındaki Camiler');
   $('#d-hadis').onclick = () => sayfa(sHadisler, 'Hadis-i Şerifler');
   $('#d-esma').onclick = () => sayfa(sEsma, 'Esmâü\'l-Hüsnâ');
   $('#d-kible').onclick = () => sayfa(sKible, 'Kıble');
@@ -553,7 +669,17 @@ function sAyarlar(m) {
     <div class="kart"><h2>Yazı boyutu</h2>
       <div class="ar" style="text-align:center">بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيمِ</div><div class="meal" style="text-align:center">Rahmân ve Rahîm olan Allah'ın adıyla</div>
       <div class="zikir-alt" style="margin-top:10px"><button class="btn" id="kucult">A−</button><button class="btn" id="buyut">A+</button></div></div>
+    <div class="kart"><h2>Bildirimler</h2>
+      <div class="ayar-satir"><span>Günün hadisi<br><span class="soluk">Her gün öğle ezanından 30 dakika önce</span></span><button class="anahtar ${oku('hadisBildirim', true) ? 'acik' : ''}" data-bil="hadisBildirim"></button></div>
+      <div class="ayar-satir" style="margin-top:12px"><span>Cuma gecesi hatırlatması<br><span class="soluk">Perşembe akşamı Yâsîn ve sûreler</span></span><button class="anahtar ${oku('cumaBildirim', true) ? 'acik' : ''}" data-bil="cumaBildirim"></button></div>
+      <p class="soluk" style="margin:10px 0 0">Ezan bildirimleri Vakitler sekmesinden ayarlanır.</p></div>
+    <div class="kart"><h2>Kur'an sesi (hafız)</h2><select class="sec" id="a-kari">${Object.entries(KARILER).map(([k, v]) => `<option value="${k}" ${k === oku('kari', 'alafasy') ? 'selected' : ''}>${esc(v[0])}</option>`).join('')}</select>
+      <p class="soluk" style="margin:8px 0 0">Kur'an dinlemek için internet gerekir.</p></div>
     <div class="kart"><h2>Zikir sayaçları</h2><button class="btn tam" id="zs-sifir">Tüm zikir sayaçlarını sıfırla</button></div>`;
+  m.querySelectorAll('[data-bil]').forEach(b => b.onclick = async () => { const k = b.dataset.bil, a = !oku(k, true);
+    if (a && !(await bildirimIzni())) { toast('Bildirim izni verilmedi. Telefon ayarlarından açabilirsiniz.'); return; }
+    yaz(k, a); b.classList.toggle('acik', a); bildirimPlanla(); });
+  $('#a-kari').onchange = e => { yaz('kari', e.target.value); toast('Hafız seçildi'); };
   m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { yaz('tema', b.dataset.t); temaUygula(); m.querySelectorAll('[data-t]').forEach(x => x.classList.toggle('acik', x === b)); });
   $('#kucult').onclick = () => { yaz('arBoyut', Math.max(20, oku('arBoyut', 28) - 2)); yaz('trBoyut', Math.max(13, oku('trBoyut', 16) - 1)); boyutUygula(); };
   $('#buyut').onclick = () => { yaz('arBoyut', Math.min(44, oku('arBoyut', 28) + 2)); yaz('trBoyut', Math.min(24, oku('trBoyut', 16) + 1)); boyutUygula(); };
@@ -591,6 +717,12 @@ if (NATIVE) {
   const SB = eklenti('StatusBar'); if (SB) SB.setStyle({ style: 'DARK' }).catch(() => {});
   const App = eklenti('App'); // Android geri tuşu (App eklentisi yoksa sessizce geçer)
   if (App && App.addListener) App.addListener('backButton', () => { if (yigin.length > 1) geri(); else if (App.exitApp) App.exitApp(); });
+  const LN = eklenti('LocalNotifications');
+  if (LN && LN.addListener) LN.addListener('localNotificationActionPerformed', e => {
+    const git = e && e.notification && e.notification.extra && e.notification.extra.git;
+    if (git === 'cuma') { sekme('bugun'); sayfa(sCumaGecesi, 'Cuma Gecesi'); }
+    else if (git === 'hadis') { sekme('bugun'); setTimeout(() => { const el = $('#gh'); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 300); }
+  });
 }
 // Diyanet verisini tazele, bildirimleri yeniden planla (iOS'ta en fazla 64 bekleyen bildirim olduğu için her açılışta yenilenir)
 Promise.all([diyanetGuncelle(false), diniGunGuncelle()]).then(() => bildirimPlanla());
