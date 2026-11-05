@@ -84,10 +84,26 @@ def amblem(S, olcek=1.0):
     return im.convert('RGB')
 
 os.makedirs('assets', exist_ok=True)
-amblem(1024).save('assets/icon-only.png')
-# Android uyarlanabilir ikon: amblem görünen alana (orta %66) sığar
-amblem(1024, .74).save('assets/icon-background.png')
-Image.new('RGBA', (1024, 1024), (0, 0, 0, 0)).save('assets/icon-foreground.png')
-sp = amblem(1366, .55).resize((2732, 2732), Image.LANCZOS)
-sp.save('assets/splash.png'); sp.save('assets/splash-dark.png')
-print('ikon ve açılış ekranı hazır')
+KAYNAK = 'store/ikon.png'   # hazır ikon (1024x1024) varsa onu kullan, yoksa yukarıdaki amblemi çiz
+if os.path.exists(KAYNAK):
+    ic = Image.open(KAYNAK).convert('RGB').resize((1024, 1024), Image.LANCZOS)
+    ic.save('assets/icon-only.png')
+    # Android uyarlanabilir ikon: ikon görünen alana (orta %66) sığar, zemin ikonun kenar rengi
+    kenar = ic.crop((0, 380, 24, 760)).resize((1, 1), Image.LANCZOS).getpixel((0, 0))   # ikonun sol kenar rengi
+    bg = Image.new('RGB', (1024, 1024), kenar)
+    ic_kucuk = ic.resize((720, 720), Image.LANCZOS)
+    m = Image.new('L', (720, 720), 0); ImageDraw.Draw(m).rounded_rectangle([24, 24, 695, 695], radius=120, fill=255)
+    bg.paste(ic_kucuk, (152, 152), m.filter(ImageFilter.GaussianBlur(20))); bg.save('assets/icon-background.png')
+    Image.new('RGBA', (1024, 1024), (0, 0, 0, 0)).save('assets/icon-foreground.png')
+    # Açılış ekranı: koyu zemin ortasında yuvarlak köşeli ikon
+    S = 2732; sp = zemin(S).convert('RGB'); k = 900
+    i2 = ic.resize((k, k), Image.LANCZOS); m2 = Image.new('L', (k, k), 0); ImageDraw.Draw(m2).rounded_rectangle([0, 0, k-1, k-1], radius=int(k*.225), fill=255)
+    sp.paste(i2, ((S-k)//2, (S-k)//2), m2); sp.save('assets/splash.png'); sp.save('assets/splash-dark.png')
+else:
+    amblem(1024).save('assets/icon-only.png')
+    # Android uyarlanabilir ikon: amblem görünen alana (orta %66) sığar
+    amblem(1024, .74).save('assets/icon-background.png')
+    Image.new('RGBA', (1024, 1024), (0, 0, 0, 0)).save('assets/icon-foreground.png')
+    sp = amblem(1366, .55).resize((2732, 2732), Image.LANCZOS)
+    sp.save('assets/splash.png'); sp.save('assets/splash-dark.png')
+print('ikon ve açılış ekranı hazır' + (' (store/ikon.png)' if os.path.exists(KAYNAK) else ' (çizilen amblem)'))
