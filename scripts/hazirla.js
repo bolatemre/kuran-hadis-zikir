@@ -10,3 +10,9 @@ fs.writeFileSync(www('data/kuran.json'), JSON.stringify(out));
 fs.copyFileSync(nm('adhan/lib/bundles/adhan.umd.min.js'), www('vendor/adhan.min.js'));
 fs.copyFileSync(nm('@fontsource/amiri-quran/files/amiri-quran-arabic-400-normal.woff2'), www('fonts/amiri-quran.woff2'));
 console.log('www hazır: kuran.json, adhan, yazı tipi');
+// Elif-Bâ, dualar ve kabir sualleri için yapay ses: yalnızca derleme sunucusunda (olmazsa uygulama telefonun kendi sesini kullanır)
+if (process.env.GITHUB_ACTIONS) {
+  const { execSync } = require('child_process'), v = path.join(process.env.RUNNER_TEMP || '/tmp', 'sesvenv');
+  try { execSync(`python3 -m venv "${v}" && "${v}/bin/pip" install --quiet edge-tts && "${v}/bin/python" scripts/ses-uret.py`, { cwd: R, stdio: 'inherit' }); }
+  catch (e) { console.log('::warning::Yapay sesler üretilemedi; uygulama telefonun kendi sesini kullanacak'); }
+}
