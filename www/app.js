@@ -1,4 +1,4 @@
-/* Kuran Hadis Zikir — Allah rızası için. */
+/* Üç Nur: Kuran Hadis Zikir — Allah rızası için. */
 'use strict';
 
 // ---------- Ayarlar ----------
@@ -478,7 +478,7 @@ function sDiniGunler(m) {
   const ciz3 = () => {
     const l = yaklasanGunler(400);
     if (!l.length) { m.innerHTML = '<p class="soluk">Dini günler listesi henüz yüklenmedi. İnternete bağlıyken tekrar açın.</p>'; return; }
-    m.innerHTML = `<div class="liste">${l.map(x => { const f = gunFarki(x.tarih); return `<div><span class="no">${x.tur === 'kandil' ? '🕯' : x.tur === 'bayram' ? '🌙' : '✦'}</span><span class="orta"><b>${esc(x.ad)}</b><span class="soluk">${esc(tarihYaz(x.tarih, { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' }))}</span></span><span class="soluk">${f === 0 ? 'Bugün' : f === 1 ? 'Yarın' : f + ' gün'}</span></div>`; }).join('')}</div>
+    m.innerHTML = `<div class="liste">${l.map(x => { const f = gunFarki(x.tarih); return `<div><span class="no">${x.tur === 'kandil' ? '🕯️' : x.tur === 'bayram' ? '🌙' : '✦'}</span><span class="orta"><b>${esc(x.ad)}</b><span class="soluk">${esc(tarihYaz(x.tarih, { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' }))}</span></span><span class="soluk">${f === 0 ? 'Bugün' : f === 1 ? 'Yarın' : f + ' gün'}</span></div>`; }).join('')}</div>
       <p class="soluk">Kandil geceleri, belirtilen günün akşamıdır. Tarihler Diyanet hicri takvimine göre hesaplanmıştır.</p>`;
   };
   ciz3(); diniGunGuncelle().then(() => { if (yigin[yigin.length - 1].fn === sDiniGunler) ciz3(); });
@@ -520,11 +520,11 @@ function sHakkinda(m) {
       Namaz vakitleri, imsakiye ve hicri takvim: AlAdhan (aladhan.com), Diyanet İşleri Başkanlığı hesaplama yöntemi ve hicri takvimi; internet yokken adhan kütüphanesiyle (MIT) aynı yöntemle hesaplanır<br>
       Hadis tercümeleri: belirtilen hadis kaynaklarından seçilmiştir.<br>
       Arapça yazı tipi: Amiri Quran (SIL Open Font License)</p></div>
-    <p class="soluk" style="text-align:center">Kuran Hadis Zikir · sürüm 1.0</p>`;
+    <p class="soluk" style="text-align:center">Üç Nur: Kuran Hadis Zikir · sürüm 1.0</p>`;
 }
 
 const SEKMELER = {
-  bugun: [sBugun, 'Kuran Hadis Zikir'], kuran: [sKuran, 'Kur\'an-ı Kerîm'], zikir: [sZikir, 'Zikirmatik'],
+  bugun: [sBugun, 'Üç Nur'], kuran: [sKuran, 'Kur\'an-ı Kerîm'], zikir: [sZikir, 'Zikirmatik'],
   vakitler: [sVakitler, 'Namaz Vakitleri'], daha: [sDaha, 'Daha Fazla']
 };
 
