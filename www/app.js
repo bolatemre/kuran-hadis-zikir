@@ -8,6 +8,12 @@ const REKLAM = { ios: 'ca-app-pub-6236520075152909/9110586641', android: 'ca-app
 const VAKIT_URL = 'https://bolatemre.github.io/kuran-hadis-zikir/vakitler/';
 const KABE = { lat: 21.4225, lng: 39.8262 };
 const VAKIT_ADLARI = ['İmsak', 'Güneş', 'Öğle', 'İkindi', 'Akşam', 'Yatsı'];
+// Takip hesapları (İslam Penceresi)
+const SOSYAL = [
+  ['📸', 'Instagram', '@islampenceresi', 'https://www.instagram.com/islampenceresi/'],
+  ['▶️', 'YouTube', '@islam.penceresi', 'https://www.youtube.com/@islam.penceresi'],
+];
+const sosyalListe = () => `<div class="liste">${SOSYAL.map(([i, ad, k, url]) => `<a href="${url}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none"><span class="no">${i}</span><span class="orta"><b>${ad}</b><span class="soluk">${k}</span></span><span class="soluk">›</span></a>`).join('')}</div>`;
 
 // ---------- Yardımcılar ----------
 const $ = (s, el = document) => el.querySelector(s);
@@ -448,6 +454,8 @@ function sDaha(m) {
       ${satir('d-ayar', '⚙︎', 'Ayarlar', 'Görünüm, yazı boyutu')}
       ${satir('d-hak', '🤲', 'Bu Uygulama Hakkında', 'Niyetimiz ve kaynaklar')}
     </div>
+    <div class="kategori-baslik">Bizi takip edin · İslam Penceresi</div>
+    ${sosyalListe()}
     <div class="kart dua-kart"><h2>Destek Ol</h2>
       <p>Uygulama tamamen ücretsizdir ve kendiliğinden reklam göstermez.</p>
       <p class="soluk">Sunucu ve mağaza masraflarına katkı olsun isterseniz kısa bir reklam izleyebilirsiniz. Reklam yalnızca siz bu butona bastığınızda açılır.</p>
@@ -514,6 +522,8 @@ function sHakkinda(m) {
       <p>Bu uygulama yalnızca Allah rızası için hazırlanmıştır. Hiçbir ücret istemiyoruz, üyelik yok, verileriniz telefonunuzdan çıkmaz.</p>
       <p><b>Faydalandıysanız, uygulamayı hazırlayanlar, anne babaları, aileleri ve efradı için bir dua etmeniz bize yeter.</b></p>
       <p class="soluk">“Müslümanın, gıyabında kardeşine yaptığı dua kabul olunur. Başında görevli bir melek, ‘Âmin, aynısı sana da olsun’ der.” (Müslim, Zikir)</p></div>
+    <div class="kategori-baslik">Bizi takip edin · İslam Penceresi</div>
+    ${sosyalListe()}
     <div class="kart"><h2>Reklamlar hakkında</h2><p style="margin:0">Uygulama kendiliğinden hiçbir reklam göstermez. “Destek ol” bölümünden isteyen kullanıcılar, sunucu ve mağaza masraflarına katkı için kısa bir reklam izleyebilir. Reklamlar kişiselleştirilmez.</p></div>
     <div class="kart"><h2>Kaynaklar</h2><p style="margin:0" class="soluk">
       Kur'an-ı Kerîm Arapça metni ve Diyanet İşleri Başkanlığı meali: Tanzil.net (tanzil.net)<br>
