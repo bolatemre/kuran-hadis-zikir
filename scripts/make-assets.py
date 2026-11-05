@@ -84,9 +84,14 @@ def amblem(S, olcek=1.0):
     return im.convert('RGB')
 
 os.makedirs('assets', exist_ok=True)
-KAYNAK = 'store/ikon.png'   # hazır ikon (1024x1024) varsa onu kullan, yoksa yukarıdaki amblemi çiz
-if os.path.exists(KAYNAK):
-    ic = Image.open(KAYNAK).convert('RGB').resize((1024, 1024), Image.LANCZOS)
+# Hazır ikon (1024x1024) varsa onu kullan, yoksa yukarıdaki amblemi çiz
+KAYNAK = next((f for f in ('store/ikon.png', 'ikon.png') if os.path.exists(f)), None)
+if KAYNAK:
+    ham = Image.open(KAYNAK).convert('RGBA').resize((1024, 1024), Image.LANCZOS)
+    # Köşeleri şeffaf (yuvarlatılmış) bir dosya yüklendiyse: Apple şeffaflık kabul etmez,
+    # şeffaf yerleri ikonun kenar rengiyle doldur (telefon köşeleri zaten kendisi yuvarlar)
+    kr = ham.crop((8, 380, 40, 760)).convert('RGB').resize((1, 1), Image.LANCZOS).getpixel((0, 0))
+    ic = Image.new('RGB', (1024, 1024), kr); ic.paste(ham, (0, 0), ham)
     ic.save('assets/icon-only.png')
     # Android uyarlanabilir ikon: ikon görünen alana (orta %66) sığar, zemin ikonun kenar rengi
     kenar = ic.crop((0, 380, 24, 760)).resize((1, 1), Image.LANCZOS).getpixel((0, 0))   # ikonun sol kenar rengi
@@ -106,4 +111,4 @@ else:
     Image.new('RGBA', (1024, 1024), (0, 0, 0, 0)).save('assets/icon-foreground.png')
     sp = amblem(1366, .55).resize((2732, 2732), Image.LANCZOS)
     sp.save('assets/splash.png'); sp.save('assets/splash-dark.png')
-print('ikon ve açılış ekranı hazır' + (' (store/ikon.png)' if os.path.exists(KAYNAK) else ' (çizilen amblem)'))
+print('ikon ve açılış ekranı hazır' + (f' ({KAYNAK})' if KAYNAK else ' (çizilen amblem)'))
