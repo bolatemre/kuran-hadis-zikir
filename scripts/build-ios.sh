@@ -3,7 +3,7 @@
 # derleme adımlarında değişiklik gerekirse yalnızca bu dosya güncellenir.
 set -euo pipefail
 TEAM_ID=Z5ZU32M6W4
-ASC_KEY_ID=5YXHN38GN5
+ASC_KEY_ID=G272Z79794
 ASC_ISSUER_ID=ab9b64ae-e251-4e02-b25f-e51f11fccc2d
 BUNDLE_ID=com.bolatemre.khz
 BUILD_NUMBER="${BUILD_NUMBER:-1}"
@@ -27,9 +27,8 @@ test -f www/index.html || { echo "www/index.html bulunamadı"; exit 1; }
 echo "::group::Paketler"
 npm install --no-audit --no-fund
 node scripts/hazirla.js
-# Şifreli imza anahtarları Köyden Şehre reposundakilerle aynı (aynı Apple hesabı ve Play yükleme anahtarı); şifre KEY_PASS'ta
-mkdir -p secrets
-for f in asc-key dist-key android-upload; do test -s secrets/$f.enc || curl -fsSL "https://raw.githubusercontent.com/bolatemre/memleketim/main/secrets/$f.enc" -o secrets/$f.enc; done
+# Şifreli imza anahtarları repodaki secrets/ klasöründe; şifre GitHub Secret KEY_PASS'ta
+for f in asc-key dist-key android-upload; do test -s secrets/$f.enc || { echo "::error::secrets/$f.enc yok"; exit 1; }; done
 python3 -m pip install --quiet --break-system-packages pillow 2>/dev/null || python3 -m pip install --quiet --user pillow
 echo "::endgroup::"
 

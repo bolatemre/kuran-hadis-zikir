@@ -8,9 +8,8 @@ echo "::group::Paketler"
 test -f www/index.html || { echo "www/index.html bulunamadı"; exit 1; }
 npm install --no-audit --no-fund
 node scripts/hazirla.js
-# Şifreli imza anahtarları Köyden Şehre reposundakilerle aynı (aynı Apple hesabı ve Play yükleme anahtarı); şifre KEY_PASS'ta
-mkdir -p secrets
-for f in asc-key dist-key android-upload; do test -s secrets/$f.enc || curl -fsSL "https://raw.githubusercontent.com/bolatemre/memleketim/main/secrets/$f.enc" -o secrets/$f.enc; done
+# Şifreli imza anahtarları repodaki secrets/ klasöründe; şifre GitHub Secret KEY_PASS'ta
+for f in asc-key dist-key android-upload; do test -s secrets/$f.enc || { echo "::error::secrets/$f.enc yok"; exit 1; }; done
 python3 -m pip install --quiet pillow 2>/dev/null || python3 -m pip install --quiet --user pillow || python3 -m pip install --quiet --break-system-packages pillow
 python3 scripts/make-assets.py
 echo "::endgroup::"
