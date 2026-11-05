@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="color-scheme" content="light dark">
+<title>Kuran Hadis Zikir</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="ust">
+  <button id="geri" class="ikon-btn" aria-label="Geri" hidden>‹</button>
+  <h1 id="baslik">Kuran Hadis Zikir</h1>
+  <span id="ust-sag"></span>
+</header>
+
+<main id="icerik"></main>
+
+<nav id="sekmeler">
+  <button data-s="bugun" class="aktif"><span class="s-ikon">☀︎</span><span>Bugün</span></button>
+  <button data-s="kuran"><span class="s-ikon">۞</span><span>Kur'an</span></button>
+  <button data-s="zikir"><span class="s-ikon">◎</span><span>Zikir</span></button>
+  <button data-s="vakitler"><span class="s-ikon">◷</span><span>Vakitler</span></button>
+  <button data-s="daha"><span class="s-ikon">☰</span><span>Daha</span></button>
+</nav>
+
+<div id="toast" hidden></div>
+
+<script src="vendor/adhan.min.js"></script>
+<script src="data/icerik.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
