@@ -45,7 +45,11 @@ function sekme(ad) {
 function ciz() {
   const top = yigin[yigin.length - 1];
   temizlik.forEach(f => { try { f(); } catch (e) {} }); temizlik = [];
-  $('#baslik').textContent = top.baslik; $('#geri').hidden = yigin.length < 2; $('#ust-sag').innerHTML = '';
+  const ana = yigin.length === 1 && top.fn === sBugun;
+  $('#ust').classList.toggle('ana', ana);
+  if (ana) $('#baslik').innerHTML = '<span class="ust-ad">Üç Nur</span><span class="ust-alt">Kur\'an, Hadis ve Zikirde Buluşalım!</span>';
+  else $('#baslik').textContent = top.baslik;
+  $('#geri').hidden = yigin.length < 2; $('#ust-sag').innerHTML = '';
   const m = $('#icerik'); m.innerHTML = ''; m.scrollTop = 0; top.fn(m);
 }
 let temizlik = []; // sayfa değişince durdurulacak zamanlayıcılar/dinleyiciler
@@ -77,6 +81,33 @@ function siradakiVakit(simdi = new Date()) {
   const yarin = new Date(simdi); yarin.setDate(yarin.getDate() + 1);
   return { i: 0, t: gunVakitleri(yarin).v[0], onceki: 5 };
 }
+// Kerahat vakitleri (yaklaşık): güneş doğduktan sonra, öğleden önce (istiva) ve akşamdan önce (isfirar) 45'er dakika
+const KERAHAT_DK = 45;
+function kerahatler(tarih) {
+  const v = gunVakitleri(tarih).v, dk = KERAHAT_DK * 60e3;
+  return [
+    { ad: 'Güneş doğuşu', bas: v[1], bit: new Date(v[1].getTime() + dk) },
+    { ad: 'Öğle öncesi (istiva)', bas: new Date(v[2].getTime() - dk), bit: v[2] },
+    { ad: 'Akşam öncesi (isfirar)', bas: new Date(v[4].getTime() - dk), bit: v[4] },
+  ];
+}
+function kerahatDurum(simdi = new Date()) {
+  const yarin = new Date(simdi); yarin.setDate(yarin.getDate() + 1);
+  const l = [...kerahatler(simdi), ...kerahatler(yarin)];
+  const icinde = l.find(k => simdi >= k.bas && simdi < k.bit);
+  if (icinde) return { icinde: true, k: icinde, kalan: icinde.bit - simdi };
+  const sonraki = l.find(k => k.bas > simdi);
+  return { icinde: false, k: sonraki, kalan: sonraki.bas - simdi };
+}
+// Önceki ve sonraki vakit (ilerleme çubuğu için)
+function vakitAraligi(simdi = new Date()) {
+  const dun = new Date(simdi); dun.setDate(dun.getDate() - 1);
+  const yarin = new Date(simdi); yarin.setDate(yarin.getDate() + 1);
+  const l = [gunVakitleri(dun).v[5], ...gunVakitleri(simdi).v, gunVakitleri(yarin).v[0]];
+  const j = l.findIndex(t => t > simdi), onceki = l[j - 1], t = l[j];
+  return { i: (j - 1) % 6, t, onceki, oran: Math.min(1, Math.max(0, (simdi - onceki) / (t - onceki))) };
+}
+function selam(d = new Date()) { const h = d.getHours(); return h < 5 ? 'Hayırlı geceler' : h < 11 ? 'Hayırlı sabahlar' : h < 17 ? 'Hayırlı günler' : h < 22 ? 'Hayırlı akşamlar' : 'Hayırlı geceler'; }
 function kalan(ms) { const s = Math.max(0, Math.floor(ms / 1000)); return [Math.floor(s / 3600), Math.floor(s % 3600 / 60), s % 60].map(x => String(x).padStart(2, '0')).join(':'); }
 async function diyanetGuncelle(zorla) {
   const k = konum(); if (k.tip !== 'il') return false;
@@ -174,27 +205,37 @@ function sBugun(m) {
   const bugun = new Date(), gn = gunNo(bugun);
   const tarih = bugun.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' });
   m.innerHTML = `
-    <div class="kart vakit-kart" id="vk">
-      <h2>${esc(konumAdi())} · <span id="vk-ad"></span> vaktine</h2>
+    <div class="hero" id="vk">
+      <div class="hero-ust"><span>📍 ${esc(konumAdi())}</span><span>${esc(hicri(bugun))}</span></div>
+      <div class="hero-selam">${selam(bugun)}</div>
+      <div class="hero-etiket"><span id="vk-ad"></span> vaktine kalan</div>
       <div class="geri-sayim" id="vk-sayac">--:--:--</div>
-      <div class="soluk" style="color:#dfe9e3">${esc(tarih)} · ${esc(hicri(bugun))}</div>
+      <div class="ilerleme"><i id="vk-bar"></i></div>
+      <div class="kerahat" id="vk-kerahat"></div>
       <div class="vakit-satir" id="vk-satir"></div>
+      <div class="hero-alt">${esc(tarih)}</div>
     </div>
-    <div class="hizli">
-      <button id="h-devam"><b>Okumaya devam</b><span id="h-devam-alt">Kur'an-ı Kerîm</span></button>
-      <button id="h-zikir"><b>Zikirmatik</b><span>Bugün: ${oku('gunluk.' + ymd(bugun), 0)} zikir</span></button>
+    <div class="hizli hizli4">
+      <button id="h-devam"><span class="h-ikon">📖</span><b>Okumaya devam</b><span id="h-devam-alt">Kur'an-ı Kerîm</span></button>
+      <button id="h-zikir"><span class="h-ikon">📿</span><b>Zikirmatik</b><span>Bugün: ${oku('gunluk.' + ymd(bugun), 0)} zikir</span></button>
+      <button id="h-kible"><span class="h-ikon">🧭</span><b>Kıble</b><span>Pusula</span></button>
+      <button id="h-imsakiye"><span class="h-ikon">🌙</span><b>İmsakiye</b><span>Ramazan</span></button>
     </div>
     <div id="ozel-gun"></div>
-    <div class="kart"><h2>Günün Ayeti</h2><div id="ga">…</div></div>
-    <div class="kart"><h2>Günün Hadisi</h2><div class="hadis-metin" id="gh"></div></div>
+    <div class="kart ayet-kart"><div class="sus">۞</div><h2>Günün Ayeti</h2><div id="ga">…</div></div>
+    <div class="kart hadis-kart"><h2>Günün Hadisi</h2><div class="hadis-metin" id="gh"></div></div>
     <div class="kart dua-kart">
       <p class="soluk">Bu uygulama Allah rızası için hazırlandı.</p>
       <p>Hazırlayanlar, aileleri ve efradı için bir dua etmeniz yeter. 🤲</p>
     </div>`;
   const vk = () => {
-    const s = siradakiVakit(), v = gunVakitleri(new Date()).v;
-    $('#vk-ad').textContent = VAKIT_ADLARI[s.i]; $('#vk-sayac').textContent = kalan(s.t - new Date());
-    $('#vk-satir').innerHTML = v.map((t, i) => `<div class="${i === s.onceki ? 'simdi' : ''}"><b>${saatYaz(t)}</b>${VAKIT_ADLARI[i]}</div>`).join('');
+    const simdi = new Date(), s = vakitAraligi(simdi), v = gunVakitleri(simdi).v, kd = kerahatDurum(simdi);
+    const simdiki = siradakiVakit(simdi).onceki;
+    $('#vk-ad').textContent = VAKIT_ADLARI[s.i]; $('#vk-sayac').textContent = kalan(s.t - simdi);
+    $('#vk-bar').style.width = (s.oran * 100).toFixed(1) + '%';
+    const kk = $('#vk-kerahat'); kk.classList.toggle('aktif', kd.icinde);
+    kk.innerHTML = kd.icinde ? `⚠️ Kerahat vakti · bitimine <b>${kalan(kd.kalan)}</b>` : `Kerahat vaktine <b>${kalan(kd.kalan)}</b> <span>(${saatYaz(kd.k.bas)})</span>`;
+    $('#vk-satir').innerHTML = v.map((t, i) => `<div class="${i === simdiki ? 'simdi' : ''}"><b>${saatYaz(t)}</b>${VAKIT_ADLARI[i]}</div>`).join('');
   };
   vk(); const z = setInterval(vk, 1000); temizlik.push(() => clearInterval(z));
   $('#vk').onclick = () => sekme('vakitler');
@@ -212,6 +253,8 @@ function sBugun(m) {
   const son = oku('sonOkunan', null);
   $('#h-devam').onclick = () => { if (son) sayfa(mm => sOku(mm, son.s, son.a), 'Kur\'an'); else sekme('kuran'); };
   $('#h-zikir').onclick = () => sekme('zikir');
+  $('#h-kible').onclick = () => sayfa(sKible, 'Kıble');
+  $('#h-imsakiye').onclick = () => sayfa(sImsakiye, 'Ramazan İmsakiyesi');
   const h = HADISLER[gn % HADISLER.length];
   $('#gh').innerHTML = `${esc(h[1])}<div class="kaynak">${esc(h[2])}</div>`;
   const [s, a] = SECME_AYETLER[gn % SECME_AYETLER.length];
@@ -360,6 +403,7 @@ function sVakitler(m) {
       <div class="kart vakit-kart"><h2>${esc(konumAdi())} · ${VAKIT_ADLARI[s.i]} vaktine</h2><div class="geri-sayim" id="vs">--:--:--</div>
         <div class="soluk" style="color:#dfe9e3">${esc(bugun.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' }))}<br>${esc(hicri(bugun))}</div></div>
       <div class="liste vakit-liste">${gv.v.map((t, i) => `<div class="${i === s.onceki ? 'simdi' : ''}"><span class="ad">${VAKIT_ADLARI[i]}</span><span><span class="saat">${saatYaz(t)}</span><button class="zil ${ba.acik && ba.vakitler[i] ? 'acik' : ''}" data-z="${i}" aria-label="Bildirim">🔔</button></span></div>`).join('')}</div>
+      <div class="kart"><h2>Kerahat vakitleri (yaklaşık)</h2>${kerahatler(bugun).map(x => `<div class="ayar-satir" style="margin:4px 0"><span>${x.ad}</span><b>${saatYaz(x.bas)} – ${saatYaz(x.bit)}</b></div>`).join('')}<p class="soluk" style="margin:8px 0 0">Bu vakitlerde namaz kılmak mekruhtur. Süreler yaklaşık ${KERAHAT_DK} dakika olarak gösterilir.</p></div>
       <p class="soluk" style="margin:-4px 4px 12px">${gv.kaynak !== 'Hesaplama' ? 'Diyanet hesaplama yöntemi · AlAdhan' : 'İnternetsiz hesaplandı (Diyanet yöntemi). İnternete bağlanınca güncel veri yüklenir.'}</p>
       <div class="kart"><h2>Konum</h2>
         <select class="sec" id="il"><option value="">Konumum (GPS)</option>${ILLER.map((x, i) => `<option value="${i + 1}" ${k.tip === 'il' && k.plaka === i + 1 ? 'selected' : ''}>${esc(x[0])}</option>`).join('')}</select>
