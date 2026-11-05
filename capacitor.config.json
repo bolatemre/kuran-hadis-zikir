@@ -1,0 +1,19 @@
+{
+  "appId": "com.bolatemre.khz",
+  "appName": "Kuran Hadis Zikir",
+  "webDir": "www",
+  "backgroundColor": "#0f3d2e",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#0f3d2e"
+  },
+  "android": {
+    "backgroundColor": "#0f3d2e",
+    "adjustMarginsForEdgeToEdge": "auto"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "iconColor": "#0f3d2e"
+    }
+  }
+}

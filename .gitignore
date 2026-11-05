@@ -1,0 +1,9 @@
+node_modules/
+ios/
+android/
+assets/
+dist/
+.DS_Store
+www/data/kuran.json
+www/vendor/
+www/fonts/

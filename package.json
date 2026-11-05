@@ -1,0 +1,27 @@
+{
+  "name": "kuran-hadis-zikir",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kuran Hadis Zikir - Allah rızası için ücretsiz Kur'an, hadis, zikir ve namaz vakitleri uygulaması",
+  "dependencies": {
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/local-notifications": "7.0.7",
+    "@capacitor/haptics": "7.0.5",
+    "@capacitor-community/admob": "7.2.0",
+    "@capacitor/status-bar": "7.0.6",
+    "@capacitor/app": "7.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor/assets": "^3.0.5",
+    "quran-json": "3.1.2",
+    "adhan": "4.4.6",
+    "@fontsource/amiri-quran": "5.3.0"
+  },
+  "scripts": {
+    "hazirla": "node scripts/hazirla.js",
+    "sunucu": "npm run hazirla && npx http-server www -p 8080"
+  }
+}
