@@ -4,7 +4,7 @@
 // ---------- Ayarlar ----------
 // Ödüllü reklam birimleri. ŞU AN GOOGLE TEST KİMLİKLERİ: AdMob'da gerçek birimleri açınca değiştir.
 const REKLAM = { ios: 'ca-app-pub-3940256099942544/1712485313', android: 'ca-app-pub-3940256099942544/5224354917' };
-// Diyanet vakitleri GitHub Pages'te yayınlanır (scripts/diyanet-vakitler.js, aylık güncellenir)
+// Namaz vakitleri ve dini günler GitHub Pages'te yayınlanır (scripts/aladhan-vakitler.js, AlAdhan · Diyanet yöntemi, aylık güncellenir)
 const VAKIT_URL = 'https://bolatemre.github.io/kuran-hadis-zikir/vakitler/';
 const KABE = { lat: 21.4225, lng: 39.8262 };
 const VAKIT_ADLARI = ['İmsak', 'Güneş', 'Öğle', 'İkindi', 'Akşam', 'Yatsı'];
@@ -60,7 +60,7 @@ function trSaat(gun, hm) { const [y, m, d] = gun.split('-').map(Number), [h, mi]
 // Belirli bir günün altı vakti: önce Diyanet verisi, yoksa hesaplama (adhan, Türkiye yöntemi)
 function gunVakitleri(tarih, k = konum()) {
   const dv = diyanetVeri(k), gun = ymd(tarih);
-  if (dv && dv.gunler && dv.gunler[gun]) return { v: dv.gunler[gun].map(hm => trSaat(gun, hm)), kaynak: 'Diyanet' };
+  if (dv && dv.gunler && dv.gunler[gun]) return { v: dv.gunler[gun].map(hm => trSaat(gun, hm)), kaynak: dv.kaynak || 'Diyanet' };
   const c = konumKoord(k), p = adhan.CalculationMethod.Turkey();
   const pt = new adhan.PrayerTimes(new adhan.Coordinates(c.lat, c.lng), tarih, p);
   return { v: [pt.fajr, pt.sunrise, pt.dhuhr, pt.asr, pt.maghrib, pt.isha], kaynak: 'Hesaplama' };
@@ -83,6 +83,25 @@ async function diyanetGuncelle(zorla) {
     yaz('dv.' + k.plaka, j); yaz('dvZaman.' + k.plaka, Date.now()); return true;
   } catch (e) { return false; }
 }
+async function diniGunGuncelle() {
+  if (Date.now() - oku('dgZaman', 0) < 24 * 3600e3 && oku('dg', null)) return;
+  try { const r = await fetch(VAKIT_URL + 'dini-gunler.json', { cache: 'no-store' }); if (!r.ok) return; const j = await r.json(); if (j.gunler) { yaz('dg', j.gunler); yaz('dgZaman', Date.now()); } } catch (e) {}
+}
+function yaklasanGunler(gunSayisi = 400) {
+  const b = ymd(new Date()), s = ymd(new Date(Date.now() + gunSayisi * 864e5));
+  return (oku('dg', []) || []).filter(x => x.tarih >= b && x.tarih <= s);
+}
+function gunFarki(t) { const [y, m, d] = t.split('-').map(Number), n = new Date(); return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())) / 864e5); }
+function tarihYaz(t, o = { day: 'numeric', month: 'long', weekday: 'long' }) { const [y, m, d] = t.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('tr-TR', o); }
+// Seçili ilin verisinden Ramazan günleri (şu anki ya da sıradaki Ramazan)
+function ramazanGunleri() {
+  const dv = diyanetVeri(); if (!dv || !dv.hicriNo) return null;
+  const b = ymd(new Date(Date.now() - 31 * 864e5));
+  const t = Object.keys(dv.hicriNo).sort().filter(x => x >= b && dv.hicriNo[x][1] === 9);
+  if (!t.length) return null;
+  const yil = dv.hicriNo[t[0]][2];
+  return t.filter(x => dv.hicriNo[x][2] === yil).map(x => ({ tarih: x, gun: dv.hicriNo[x][0], v: dv.gunler[x] }));
+}
 function hicri(d = new Date()) {
   const dv = diyanetVeri(); if (dv && dv.hicri && dv.hicri[ymd(d)]) return dv.hicri[ymd(d)];
   try { return new Intl.DateTimeFormat('tr-TR-u-ca-islamic-umalqura', { day: 'numeric', month: 'long', year: 'numeric' }).format(d).replace(/^Hicri\s+|\s+(AH|Hicri)$/gi, '') + ' (yaklaşık)'; } catch (e) { return ''; }
@@ -93,7 +112,7 @@ function bildirimAyar() { return oku('bildirim', { acik: false, vakitler: [true,
 async function bildirimPlanla() {
   const LN = eklenti('LocalNotifications'); if (!NATIVE || !LN) return;
   try {
-    const bekleyen = await LN.getPending(); const eski = (bekleyen.notifications || []).filter(n => n.id >= 1000 && n.id < 2000);
+    const bekleyen = await LN.getPending(); const eski = (bekleyen.notifications || []).filter(n => n.id >= 1000 && n.id < 3000);
     if (eski.length) await LN.cancel({ notifications: eski.map(n => ({ id: n.id })) });
     const a = bildirimAyar(); if (!a.acik) return;
     const liste = [], simdi = new Date(), ad = konumAdi();
@@ -111,7 +130,12 @@ async function bildirimPlanla() {
         });
       });
     }
-    if (liste.length) await LN.schedule({ notifications: liste.slice(0, 50) });
+    // Kandil ve bayramlar için o günün sabahı 10:00'da hatırlatma
+    yaklasanGunler(7).filter(x => x.tur !== 'gun' || /Ramazan Başlangıcı|Aşure|Hicrî/.test(x.ad)).slice(0, 5).forEach((x, i) => {
+      const [y, mo, d] = x.tarih.split('-').map(Number), at = new Date(y, mo - 1, d, 10, 0); if (at <= simdi) return;
+      liste.push({ id: 2000 + i, title: x.ad, body: x.tur === 'kandil' ? `Bu akşam ${x.ad}. Kandiliniz mübarek olsun.` : `Bugün ${x.ad}.`, schedule: { at, allowWhileIdle: true } });
+    });
+    if (liste.length) await LN.schedule({ notifications: liste.slice(0, 55) });
   } catch (e) { console.warn('bildirim', e); }
 }
 async function bildirimIzni() {
@@ -154,6 +178,7 @@ function sBugun(m) {
       <button id="h-devam"><b>Okumaya devam</b><span id="h-devam-alt">Kur'an-ı Kerîm</span></button>
       <button id="h-zikir"><b>Zikirmatik</b><span>Bugün: ${oku('gunluk.' + ymd(bugun), 0)} zikir</span></button>
     </div>
+    <div id="ozel-gun"></div>
     <div class="kart"><h2>Günün Ayeti</h2><div id="ga">…</div></div>
     <div class="kart"><h2>Günün Hadisi</h2><div class="hadis-metin" id="gh"></div></div>
     <div class="kart dua-kart">
@@ -167,6 +192,17 @@ function sBugun(m) {
   };
   vk(); const z = setInterval(vk, 1000); temizlik.push(() => clearInterval(z));
   $('#vk').onclick = () => sekme('vakitler');
+  const ozel = () => {
+    let h = '';
+    const rg = ramazanGunleri(), bt = ymd(new Date()), rb = rg && rg.find(x => x.tarih === bt);
+    if (rb) h += `<button class="kart vakit-kart" style="width:100%;text-align:left" id="rm"><h2>Ramazan · ${rb.gun}. gün</h2><div style="display:flex;gap:18px"><div><div class="soluk" style="color:#dfe9e3">İmsak (sahur)</div><b style="font-size:22px">${rb.v[0]}</b></div><div><div class="soluk" style="color:#dfe9e3">İftar</div><b style="font-size:22px">${rb.v[4]}</b></div></div></button>`;
+    const y = yaklasanGunler(10)[0];
+    if (y) { const f = gunFarki(y.tarih); h += `<button class="kart" style="width:100%;text-align:left" id="og"><h2>${f === 0 ? 'Bugün' : f === 1 ? 'Yarın' : f + ' gün sonra'}</h2><b style="font-size:18px">${esc(y.ad)}</b><div class="soluk">${esc(tarihYaz(y.tarih))}${y.tur === 'kandil' ? ' · kandil gecesi o günün akşamıdır' : ''}</div></button>`; }
+    $('#ozel-gun').innerHTML = h;
+    if ($('#rm')) $('#rm').onclick = () => sayfa(sImsakiye, 'Ramazan İmsakiyesi');
+    if ($('#og')) $('#og').onclick = () => sayfa(sDiniGunler, 'Dini Günler');
+  };
+  ozel(); diniGunGuncelle().then(() => { if ($('#ozel-gun')) ozel(); });
   const son = oku('sonOkunan', null);
   $('#h-devam').onclick = () => { if (son) sayfa(mm => sOku(mm, son.s, son.a), 'Kur\'an'); else sekme('kuran'); };
   $('#h-zikir').onclick = () => sekme('zikir');
@@ -318,7 +354,7 @@ function sVakitler(m) {
       <div class="kart vakit-kart"><h2>${esc(konumAdi())} · ${VAKIT_ADLARI[s.i]} vaktine</h2><div class="geri-sayim" id="vs">--:--:--</div>
         <div class="soluk" style="color:#dfe9e3">${esc(bugun.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' }))}<br>${esc(hicri(bugun))}</div></div>
       <div class="liste vakit-liste">${gv.v.map((t, i) => `<div class="${i === s.onceki ? 'simdi' : ''}"><span class="ad">${VAKIT_ADLARI[i]}</span><span><span class="saat">${saatYaz(t)}</span><button class="zil ${ba.acik && ba.vakitler[i] ? 'acik' : ''}" data-z="${i}" aria-label="Bildirim">🔔</button></span></div>`).join('')}</div>
-      <p class="soluk" style="margin:-4px 4px 12px">${gv.kaynak === 'Diyanet' ? 'Kaynak: Diyanet İşleri Başkanlığı' : 'Diyanet verisi henüz yüklenmedi; vakitler Diyanet yöntemiyle hesaplandı (1-2 dakika fark olabilir).'}</p>
+      <p class="soluk" style="margin:-4px 4px 12px">${gv.kaynak !== 'Hesaplama' ? 'Diyanet hesaplama yöntemi · AlAdhan' : 'İnternetsiz hesaplandı (Diyanet yöntemi). İnternete bağlanınca güncel veri yüklenir.'}</p>
       <div class="kart"><h2>Konum</h2>
         <select class="sec" id="il"><option value="">Konumum (GPS)</option>${ILLER.map((x, i) => `<option value="${i + 1}" ${k.tip === 'il' && k.plaka === i + 1 ? 'selected' : ''}>${esc(x[0])}</option>`).join('')}</select>
         <button class="btn tam" id="gps">📍 Konumumu bul</button></div>
@@ -329,6 +365,8 @@ function sVakitler(m) {
         ${PLATFORM === 'android' ? '<button class="btn tam" id="tam-alarm">Bildirimler gecikiyorsa: tam zamanlı alarm izni</button>' : ''}</div>
       <div class="kart"><h2>7 günlük vakitler</h2><table class="hafta"><tr><th></th>${VAKIT_ADLARI.map(v => `<th>${v}</th>`).join('')}</tr>
         ${hafta.map(([d, v]) => `<tr><th>${d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}</th>${v.map(t => `<td>${saatYaz(t)}</td>`).join('')}</tr>`).join('')}</table></div>
+      <button class="btn tam" id="imsakiye">🌙 Ramazan imsakiyesi</button>
+      <button class="btn tam" id="dinigun">📅 Dini günler ve kandiller</button>
       <button class="btn tam" id="kible">🧭 Kıble yönü</button>`;
     const say = () => { const x = siradakiVakit(); const el = $('#vs'); if (el) el.textContent = kalan(x.t - new Date()); };
     say(); const z = setInterval(say, 1000); temizlik.push(() => clearInterval(z));
@@ -342,6 +380,8 @@ function sVakitler(m) {
       const i = +b.dataset.z; a.vakitler[i] = !a.vakitler[i]; yaz('bildirim', a); bildirimPlanla(); toast(`${VAKIT_ADLARI[i]} bildirimi ${a.vakitler[i] ? 'açık' : 'kapalı'}`); ciz2(); });
     const ta = $('#tam-alarm'); if (ta) ta.onclick = async () => { const LN = eklenti('LocalNotifications'); try { await LN.changeExactNotificationSetting(); } catch (e) { toast('Bu cihazda gerekmiyor'); } };
     $('#kible').onclick = () => sayfa(sKible, 'Kıble');
+    $('#imsakiye').onclick = () => sayfa(sImsakiye, 'Ramazan İmsakiyesi');
+    $('#dinigun').onclick = () => sayfa(sDiniGunler, 'Dini Günler');
   };
   ciz2();
   diyanetGuncelle(false).then(y => { if (y && yigin[yigin.length - 1].fn === sVakitler) ciz2(); });
@@ -399,6 +439,8 @@ function sDaha(m) {
   m.innerHTML = `<div class="liste">
       ${satir('d-hadis', 'ﷺ', 'Hadis-i Şerifler', `${HADISLER.length} seçme hadis`)}
       ${satir('d-esma', '۩', 'Esmâü\'l-Hüsnâ', 'Allah\'ın 99 güzel ismi')}
+      ${satir('d-imsakiye', '🌙', 'Ramazan İmsakiyesi', 'Sahur ve iftar vakitleri')}
+      ${satir('d-dinigun', '📅', 'Dini Günler ve Kandiller', 'Bayramlar, kandiller, mübarek günler')}
       ${satir('d-kible', '🧭', 'Kıble Yönü', 'Pusula ile kıbleyi bul')}
       ${satir('d-isr', '★', 'Yer İmleri', 'İşaretlediğin ayetler')}
     </div>
@@ -413,10 +455,33 @@ function sDaha(m) {
   $('#d-hadis').onclick = () => sayfa(sHadisler, 'Hadis-i Şerifler');
   $('#d-esma').onclick = () => sayfa(sEsma, 'Esmâü\'l-Hüsnâ');
   $('#d-kible').onclick = () => sayfa(sKible, 'Kıble');
+  $('#d-imsakiye').onclick = () => sayfa(sImsakiye, 'Ramazan İmsakiyesi');
+  $('#d-dinigun').onclick = () => sayfa(sDiniGunler, 'Dini Günler');
   $('#d-isr').onclick = () => sayfa(sIsaretler, 'Yer İmleri');
   $('#d-ayar').onclick = () => sayfa(sAyarlar, 'Ayarlar');
   $('#d-hak').onclick = () => sayfa(sHakkinda, 'Hakkında');
   $('#destek').onclick = e => destekOl(e.currentTarget);
+}
+function sImsakiye(m) {
+  const rg = ramazanGunleri();
+  if (!rg) { m.innerHTML = `<div class="kart"><p style="margin:0">İmsakiye için ${esc(konumAdi())} verisi henüz yüklenmedi. İnternete bağlıyken Vakitler sekmesinden il seçtiğinizde otomatik iner.</p></div>`; diyanetGuncelle(true).then(y => { if (y && yigin[yigin.length - 1].fn === sImsakiye) ciz(); }); return; }
+  const bt = ymd(new Date()), ilk = rg[0], son = rg[rg.length - 1];
+  m.innerHTML = `<div class="kart vakit-kart"><h2>${esc(konumAdi())} · Ramazan ${diyanetVeri().hicriNo[ilk.tarih][2]}</h2>
+      <div style="font-size:18px;font-weight:600">${esc(tarihYaz(ilk.tarih, { day: 'numeric', month: 'long' }))} – ${esc(tarihYaz(son.tarih, { day: 'numeric', month: 'long', year: 'numeric' }))}</div>
+      <div class="soluk" style="color:#dfe9e3">${bt < ilk.tarih ? `Ramazan'a ${gunFarki(ilk.tarih)} gün kaldı` : 'Hayırlı Ramazanlar'}</div></div>
+    <div class="kart" style="padding:10px"><table class="hafta"><tr><th>Gün</th><th>Tarih</th><th>İmsak</th><th>Güneş</th><th>Öğle</th><th>İkindi</th><th>İftar</th><th>Yatsı</th></tr>
+      ${rg.map(x => `<tr id="r${x.tarih}" style="${x.tarih === bt ? 'background:var(--vurgu);font-weight:700' : ''}"><td>${x.gun}</td><td>${esc(tarihYaz(x.tarih, { day: 'numeric', month: 'short' }))}</td>${x.v.map((t, i) => `<td${i === 0 || i === 4 ? ' style="font-weight:700"' : ''}>${t}</td>`).join('')}</tr>`).join('')}</table></div>
+    <p class="soluk">Vakitler Diyanet hesaplama yöntemiyle (AlAdhan) hazırlanmıştır. İmsak vaktinde yemeyi bırakmak gerekir; ihtiyaten birkaç dakika önce bırakılması tavsiye edilir.</p>`;
+  const bugunSatir = m.querySelector('#r' + bt); if (bugunSatir) m.scrollTop = bugunSatir.offsetTop - 120;
+}
+function sDiniGunler(m) {
+  const ciz3 = () => {
+    const l = yaklasanGunler(400);
+    if (!l.length) { m.innerHTML = '<p class="soluk">Dini günler listesi henüz yüklenmedi. İnternete bağlıyken tekrar açın.</p>'; return; }
+    m.innerHTML = `<div class="liste">${l.map(x => { const f = gunFarki(x.tarih); return `<div><span class="no">${x.tur === 'kandil' ? '🕯' : x.tur === 'bayram' ? '🌙' : '✦'}</span><span class="orta"><b>${esc(x.ad)}</b><span class="soluk">${esc(tarihYaz(x.tarih, { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' }))}</span></span><span class="soluk">${f === 0 ? 'Bugün' : f === 1 ? 'Yarın' : f + ' gün'}</span></div>`; }).join('')}</div>
+      <p class="soluk">Kandil geceleri, belirtilen günün akşamıdır. Tarihler Diyanet hicri takvimine göre hesaplanmıştır.</p>`;
+  };
+  ciz3(); diniGunGuncelle().then(() => { if (yigin[yigin.length - 1].fn === sDiniGunler) ciz3(); });
 }
 function sHadisler(m) {
   let kat = '';
@@ -452,7 +517,7 @@ function sHakkinda(m) {
     <div class="kart"><h2>Reklamlar hakkında</h2><p style="margin:0">Uygulama kendiliğinden hiçbir reklam göstermez. “Destek ol” bölümünden isteyen kullanıcılar, sunucu ve mağaza masraflarına katkı için kısa bir reklam izleyebilir. Reklamlar kişiselleştirilmez.</p></div>
     <div class="kart"><h2>Kaynaklar</h2><p style="margin:0" class="soluk">
       Kur'an-ı Kerîm Arapça metni ve Diyanet İşleri Başkanlığı meali: Tanzil.net (tanzil.net)<br>
-      Namaz vakitleri: Diyanet İşleri Başkanlığı; veri yoksa Diyanet yöntemiyle hesaplama (adhan, MIT lisansı)<br>
+      Namaz vakitleri, imsakiye ve hicri takvim: AlAdhan (aladhan.com), Diyanet İşleri Başkanlığı hesaplama yöntemi ve hicri takvimi; internet yokken adhan kütüphanesiyle (MIT) aynı yöntemle hesaplanır<br>
       Hadis tercümeleri: belirtilen hadis kaynaklarından seçilmiştir.<br>
       Arapça yazı tipi: Amiri Quran (SIL Open Font License)</p></div>
     <p class="soluk" style="text-align:center">Kuran Hadis Zikir · sürüm 1.0</p>`;
@@ -474,5 +539,5 @@ if (NATIVE) {
   if (App && App.addListener) App.addListener('backButton', () => { if (yigin.length > 1) geri(); else if (App.exitApp) App.exitApp(); });
 }
 // Diyanet verisini tazele, bildirimleri yeniden planla (iOS'ta en fazla 64 bekleyen bildirim olduğu için her açılışta yenilenir)
-diyanetGuncelle(false).then(() => bildirimPlanla());
+Promise.all([diyanetGuncelle(false), diniGunGuncelle()]).then(() => bildirimPlanla());
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { diyanetGuncelle(false).then(() => bildirimPlanla()); if (yigin.length === 1) ciz(); } });
