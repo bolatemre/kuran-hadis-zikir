@@ -2,7 +2,7 @@
 // "Apple Distribution" sertifikasını ve tek bir App Store profilini tekrar tekrar kullanır.
 // Çıktı: $TMP/signing.env (PROFILE_NAME, PROFILE_UUID, P12, P12_PASS)
 const fs=require('fs'),crypto=require('crypto'),os=require('os'),path=require('path'),{execSync}=require('child_process');
-const TEAM='Z5ZU32M6W4',KID='5YXHN38GN5',ISS='ab9b64ae-e251-4e02-b25f-e51f11fccc2d',BUNDLE='com.bolatemre.khz',PROFILE='KHZ AppStore CI';
+const TEAM='Z5ZU32M6W4',KID='G272Z79794',ISS='ab9b64ae-e251-4e02-b25f-e51f11fccc2d',BUNDLE='com.bolatemre.khz',PROFILE='KHZ AppStore CI';
 const TMP=process.env.RUNNER_TEMP||os.tmpdir();
 const pass=process.env.KEY_PASS;if(!pass){console.error('KEY_PASS secret eksik');process.exit(1);}
 function dec(file){const b=Buffer.from(fs.readFileSync(path.join(__dirname,'..','secrets',file),'utf8').trim(),'base64');
