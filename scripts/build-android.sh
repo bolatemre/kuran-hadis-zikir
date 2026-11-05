@@ -34,7 +34,7 @@ source scripts/ads.env
 perl -0pi -e "s#(<application[^>]*>)#\$1\n        <meta-data android:name=\"com.google.android.gms.ads.APPLICATION_ID\" android:value=\"$ADMOB_ANDROID_APP_ID\"/>#" android/app/src/main/AndroidManifest.xml
 grep -n "APPLICATION_ID" android/app/src/main/AndroidManifest.xml
 # Ezan bildirimleri tam vaktinde gelsin (Android 12+): tam zamanlı alarm izni
-perl -0pi -e 's#(<manifest[^>]*>)#$1\n    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>#' android/app/src/main/AndroidManifest.xml
+perl -0pi -e 's#(<manifest[^>]*>)#$1\n    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>#' android/app/src/main/AndroidManifest.xml
 grep -E "versionCode|versionName" "$G"
 echo "::endgroup::"
 
