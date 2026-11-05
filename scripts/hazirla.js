@@ -1,0 +1,12 @@
+// npm paketlerinden uygulamaya gereken büyük dosyaları üretir (repoda tutulmaz):
+// Kur'an metni + Diyanet meali (quran-json, kaynak Tanzil.net), adhan vakit hesaplama, Amiri Quran yazı tipi.
+const fs = require('fs'), path = require('path');
+const R = path.join(__dirname, '..'), nm = p => path.join(R, 'node_modules', p), www = p => path.join(R, 'www', p);
+for (const d of ['data', 'vendor', 'fonts']) fs.mkdirSync(www(d), { recursive: true });
+const tr = JSON.parse(fs.readFileSync(nm('quran-json/dist/quran_tr.json'), 'utf8'));
+const out = tr.map(s => ({ n: s.id, ar: s.name, ad: s.translation, t: s.type === 'meccan' ? 'k' : 'd', v: s.verses.map(v => [v.text, v.translation]) }));
+if (out.length !== 114 || out.reduce((a, s) => a + s.v.length, 0) !== 6236) throw new Error('Kur\'an verisi eksik');
+fs.writeFileSync(www('data/kuran.json'), JSON.stringify(out));
+fs.copyFileSync(nm('adhan/lib/bundles/adhan.umd.min.js'), www('vendor/adhan.min.js'));
+fs.copyFileSync(nm('@fontsource/amiri-quran/files/amiri-quran-arabic-400-normal.woff2'), www('fonts/amiri-quran.woff2'));
+console.log('www hazır: kuran.json, adhan, yazı tipi');
