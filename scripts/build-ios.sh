@@ -25,7 +25,8 @@ echo "::endgroup::"
 test -f www/index.html || { echo "www/index.html bulunamadı"; exit 1; }
 
 echo "::group::Paketler"
-npm install --no-audit --no-fund
+# İnternet takılırsa (ör. sharp indirmesi zaman aşımı) 3 kez dene
+for i in 1 2 3; do npm install --no-audit --no-fund && break; [ "$i" = 3 ] && { echo "::error::npm install 3 kez başarısız"; exit 1; }; echo "npm install tekrar deneniyor ($i)"; rm -rf node_modules/sharp; sleep 20; done
 node scripts/hazirla.js
 # Şifreli imza anahtarları repodaki secrets/ klasöründe; şifre GitHub Secret KEY_PASS'ta
 for f in asc-key dist-key android-upload; do test -s secrets/$f.enc || { echo "::error::secrets/$f.enc yok"; exit 1; }; done
