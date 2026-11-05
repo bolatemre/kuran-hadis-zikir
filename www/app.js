@@ -2,8 +2,8 @@
 'use strict';
 
 // ---------- Ayarlar ----------
-// Ödüllü reklam birimleri. ŞU AN GOOGLE TEST KİMLİKLERİ: AdMob'da gerçek birimleri açınca değiştir.
-const REKLAM = { ios: 'ca-app-pub-3940256099942544/1712485313', android: 'ca-app-pub-3940256099942544/5224354917' };
+// Ödüllü reklam birimleri (AdMob, "Destek ol"). Uygulama kimlikleri scripts/ads.env içinde.
+const REKLAM = { ios: 'ca-app-pub-6236520075152909/9110586641', android: 'ca-app-pub-6236520075152909/7307771577' };
 // Namaz vakitleri ve dini günler GitHub Pages'te yayınlanır (scripts/aladhan-vakitler.js, AlAdhan · Diyanet yöntemi, aylık güncellenir)
 const VAKIT_URL = 'https://bolatemre.github.io/kuran-hadis-zikir/vakitler/';
 const KABE = { lat: 21.4225, lng: 39.8262 };
