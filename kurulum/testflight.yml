@@ -1,0 +1,19 @@
+name: TestFlight
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Derle ve TestFlight'a gönder
+        env:
+          KEY_PASS: ${{ secrets.KEY_PASS }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: bash scripts/build-ios.sh

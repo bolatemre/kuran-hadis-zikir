@@ -1,0 +1,30 @@
+name: Diyanet namaz vakitleri
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 1 * * *'   # her gün 04:17 (TR); yalnızca verisi azalan iller yenilenir
+
+permissions:
+  contents: write
+
+jobs:
+  vakitler:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Vakitleri çek
+        env:
+          DIYANET_EMAIL: ${{ secrets.DIYANET_EMAIL }}
+          DIYANET_PASSWORD: ${{ secrets.DIYANET_PASSWORD }}
+        run: node scripts/diyanet-vakitler.js
+      - name: Değişiklik varsa kaydet
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/vakitler
+          git diff --cached --quiet && echo "Değişiklik yok" || (git commit -m "Diyanet vakitleri güncellendi" && git push)

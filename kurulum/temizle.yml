@@ -1,0 +1,19 @@
+name: Eski derlemeleri temizle
+on: workflow_dispatch
+permissions:
+  actions: write
+jobs:
+  temizle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Her iş akışının son 3 çalıştırması hariç hepsini sil
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          for wf in $(gh api repos/$REPO/actions/workflows --jq '.workflows[].id'); do
+            gh api --paginate "repos/$REPO/actions/workflows/$wf/runs?per_page=100" --jq '.workflow_runs[] | select(.status=="completed") | .id' \
+              | tail -n +4 | while read id; do
+                gh api -X DELETE repos/$REPO/actions/runs/$id && echo "silindi: $id"
+              done
+          done
