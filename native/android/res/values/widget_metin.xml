@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_vakit_ad">Namaz Vakitleri</string>
+    <string name="widget_vakit_aciklama">Sıradaki vakte kalan süre ve günün vakitleri</string>
+    <string name="widget_kucuk_ad">Vakte Kalan Süre</string>
+    <string name="widget_kucuk_aciklama">Sıradaki vakte geri sayım</string>
+</resources>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wk_kok"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_zemin"
+    android:orientation="vertical"
+    android:gravity="center_vertical"
+    android:padding="12dp">
+    <TextView android:id="@+id/wk_konum" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#DDFFFFFF" android:textSize="12sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" android:text="Üç Nur" />
+    <TextView android:id="@+id/wk_etiket" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="#E8C46E" android:textSize="12sp" android:maxLines="1" android:text="" />
+    <Chronometer android:id="@+id/wk_sayac" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FFFFFF" android:textSize="24sp" android:textStyle="bold" android:maxLines="1" />
+    <TextView android:id="@+id/wk_saat" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#DDFFFFFF" android:textSize="12sp" android:maxLines="1" android:text="" />
+</LinearLayout>
