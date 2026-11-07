@@ -9,7 +9,8 @@ public class WidgetVeriPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "WidgetVeriPlugin"
     public let jsName = "WidgetVeri"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "kaydet", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "kaydet", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "durum", returnType: CAPPluginReturnPromise)
     ]
 
     static let grup = "Z5ZU32M6W4.com.bolatemre.khz.paylasim"
@@ -35,6 +36,15 @@ public class WidgetVeriPlugin: CAPPlugin, CAPBridgedPlugin {
             call.resolve()
         } else {
             call.reject("anahtar zinciri hatası: \(durum)")
+        }
+    }
+
+    /// Ana ekranda / kilit ekranında kaç Üç Nur araç takımı var? (iPhone'da uygulama kendisi ekleyemez)
+    @objc func durum(_ call: CAPPluginCall) {
+        WidgetCenter.shared.getCurrentConfigurations { sonuc in
+            var n = 0
+            if case .success(let liste) = sonuc { n = liste.count }
+            call.resolve(["eklenen": n, "sabitlenebilir": false])
         }
     }
 }
