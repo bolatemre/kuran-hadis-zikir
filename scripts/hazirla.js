@@ -15,4 +15,12 @@ if (process.env.GITHUB_ACTIONS) {
   const { execSync } = require('child_process'), v = path.join(process.env.RUNNER_TEMP || '/tmp', 'sesvenv');
   try { execSync(`python3 -m venv "${v}" && "${v}/bin/pip" install --quiet edge-tts && "${v}/bin/python" scripts/ses-uret.py`, { cwd: R, stdio: 'inherit' }); }
   catch (e) { console.log('::warning::Yapay sesler üretilemedi; uygulama telefonun kendi sesini kullanacak'); }
+  // Bildirim sesleri (kısa ezan, zil, sessiz): sesler/*.wav → derleme betikleri iOS/Android projesine ekler
+  try { execSync(`"${v}/bin/pip" install --quiet miniaudio || true; "${v}/bin/python" scripts/bildirim-sesleri.py`, { cwd: R, stdio: 'inherit' }); }
+  catch (e) { try { execSync('python3 scripts/bildirim-sesleri.py', { cwd: R, stdio: 'inherit' }); } catch (e2) { console.log('::warning::Bildirim sesleri üretilemedi'); } }
+}
+// Ayarlar'da önizleme için bildirim seslerinin bir kopyası
+if (fs.existsSync(path.join(R, 'sesler'))) {
+  fs.mkdirSync(www('bildirim'), { recursive: true });
+  for (const f of fs.readdirSync(path.join(R, 'sesler'))) if (f.endsWith('.wav')) fs.copyFileSync(path.join(R, 'sesler', f), www('bildirim/' + f));
 }
