@@ -28,9 +28,11 @@ public final class WidgetYardimci {
     static final int ALTIN = Color.parseColor("#E8C46E");
     static final int BEYAZ = Color.WHITE;
     static final int SOLUK = Color.parseColor("#CCDFE9E3");
+    static final int GECTI = Color.parseColor("#80FFFFFF");
 
     private static final int[] AD_ID = {R.id.w_ad0, R.id.w_ad1, R.id.w_ad2, R.id.w_ad3, R.id.w_ad4, R.id.w_ad5};
     private static final int[] SAAT_ID = {R.id.w_saat0, R.id.w_saat1, R.id.w_saat2, R.id.w_saat3, R.id.w_saat4, R.id.w_saat5};
+    private static final int[] KOL_ID = {R.id.w_kol0, R.id.w_kol1, R.id.w_kol2, R.id.w_kol3, R.id.w_kol4, R.id.w_kol5};
 
     private WidgetYardimci() {}
 
@@ -40,6 +42,13 @@ public final class WidgetYardimci {
         long[] gun;     // altı vakit (ms)
         int sonraki;    // vurgulanacak vakit
         long hedef;     // sıradaki vakit (ms)
+        long onceki;    // bir önceki vakit (ms), ilerleme çubuğu için
+        String hicri;   // gösterilen günün hicri tarihi
+
+        int ilerleme(long simdi) {
+            long aralik = Math.max(60000, hedef - onceki);
+            return (int) Math.max(0, Math.min(1000, (simdi - onceki) * 1000 / aralik));
+        }
     }
 
     static Durum durum(Context c, long simdi) {
@@ -49,14 +58,19 @@ public final class WidgetYardimci {
             JSONObject o = new JSONObject(s);
             JSONArray gunler = o.getJSONArray("gunler");
             List<long[]> liste = new ArrayList<>();
+            List<String> hicriler = new ArrayList<>();
             for (int i = 0; i < gunler.length(); i++) {
-                JSONArray v = gunler.getJSONObject(i).getJSONArray("v");
+                JSONObject gn = gunler.getJSONObject(i);
+                JSONArray v = gn.getJSONArray("v");
                 if (v.length() != 6) continue;
                 long[] g = new long[6];
                 for (int j = 0; j < 6; j++) g[j] = v.getLong(j);
                 liste.add(g);
+                hicriler.add(gn.optString("h", ""));
             }
-            for (long[] g : liste) {
+            long onceki = 0;
+            for (int k = 0; k < liste.size(); k++) {
+                long[] g = liste.get(k);
                 for (int j = 0; j < 6; j++) {
                     if (g[j] > simdi) {
                         Durum d = new Durum();
@@ -64,8 +78,11 @@ public final class WidgetYardimci {
                         d.gun = g;
                         d.sonraki = j;
                         d.hedef = g[j];
+                        d.onceki = onceki > 0 && onceki < g[j] ? onceki : g[j] - 6 * 3600000L;
+                        d.hicri = hicriler.get(k);
                         return d;
                     }
+                    onceki = g[j];
                 }
             }
         } catch (Exception e) {
@@ -101,23 +118,29 @@ public final class WidgetYardimci {
             rv.setTextViewText(R.id.w_konum, "Üç Nur");
             rv.setTextViewText(R.id.w_tarih, "Vakitler için uygulamayı bir kez açın");
             rv.setTextViewText(R.id.w_etiket, "");
+            rv.setTextViewText(R.id.w_hicri, "");
             rv.setChronometer(R.id.w_sayac, SystemClock.elapsedRealtime(), null, false);
+            rv.setProgressBar(R.id.w_ilerleme, 1000, 0, false);
             for (int i = 0; i < 6; i++) {
                 rv.setTextViewText(AD_ID[i], ADLAR[i]);
                 rv.setTextViewText(SAAT_ID[i], "--:--");
+                rv.setInt(KOL_ID[i], "setBackgroundResource", 0);
             }
             return rv;
         }
         rv.setTextViewText(R.id.w_konum, d.konum);
         rv.setTextViewText(R.id.w_tarih, tarih(d.gun[0]));
+        rv.setTextViewText(R.id.w_hicri, d.hicri == null ? "" : d.hicri);
         rv.setTextViewText(R.id.w_etiket, ADLAR[d.sonraki] + " vaktine");
         geriSayim(rv, R.id.w_sayac, d.hedef, simdi);
+        rv.setProgressBar(R.id.w_ilerleme, 1000, d.ilerleme(simdi), false);
         for (int i = 0; i < 6; i++) {
-            int renk = i == d.sonraki ? ALTIN : BEYAZ;
+            boolean vurgu = i == d.sonraki, gecti = i < d.sonraki;
             rv.setTextViewText(AD_ID[i], ADLAR[i]);
             rv.setTextViewText(SAAT_ID[i], saat(d.gun[i]));
-            rv.setTextColor(AD_ID[i], i == d.sonraki ? ALTIN : SOLUK);
-            rv.setTextColor(SAAT_ID[i], renk);
+            rv.setTextColor(AD_ID[i], vurgu ? ALTIN : gecti ? GECTI : SOLUK);
+            rv.setTextColor(SAAT_ID[i], vurgu ? ALTIN : gecti ? GECTI : BEYAZ);
+            rv.setInt(KOL_ID[i], "setBackgroundResource", vurgu ? R.drawable.widget_vurgu : 0);
         }
         return rv;
     }
@@ -130,12 +153,14 @@ public final class WidgetYardimci {
             rv.setTextViewText(R.id.wk_etiket, "Uygulamayı açın");
             rv.setTextViewText(R.id.wk_saat, "");
             rv.setChronometer(R.id.wk_sayac, SystemClock.elapsedRealtime(), null, false);
+            rv.setProgressBar(R.id.wk_ilerleme, 1000, 0, false);
             return rv;
         }
         rv.setTextViewText(R.id.wk_konum, d.konum);
         rv.setTextViewText(R.id.wk_etiket, ADLAR[d.sonraki] + " vaktine");
         rv.setTextViewText(R.id.wk_saat, saat(d.hedef));
         geriSayim(rv, R.id.wk_sayac, d.hedef, simdi);
+        rv.setProgressBar(R.id.wk_ilerleme, 1000, d.ilerleme(simdi), false);
         return rv;
     }
 
@@ -148,7 +173,20 @@ public final class WidgetYardimci {
         int[] kucukler = m.getAppWidgetIds(new ComponentName(c, VakitKucukWidget.class));
         if (buyukler.length > 0) m.updateAppWidget(buyukler, buyuk(c, d, simdi));
         if (kucukler.length > 0) m.updateAppWidget(kucukler, kucuk(c, d, simdi));
-        if (d != null && (buyukler.length > 0 || kucukler.length > 0)) alarmKur(c, d.hedef + 1000);
+        if (d != null && (buyukler.length > 0 || kucukler.length > 0)) {
+            alarmKur(c, d.hedef + 1000);
+            ilerlemeAlarmi(c, simdi + 10 * 60000L);
+        }
+    }
+
+    /** İlerleme çubuğu için telefon uyanıkken 10 dakikada bir tazeleme (telefonu uyandırmaz, pil harcamaz). */
+    static void ilerlemeAlarmi(Context c, long zaman) {
+        AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+        Intent i = new Intent(c, VakitWidget.class);
+        i.setAction(YENILE);
+        PendingIntent pi = PendingIntent.getBroadcast(c, 4243, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        am.set(AlarmManager.RTC, zaman, pi);
     }
 
     static void alarmKur(Context c, long zaman) {
