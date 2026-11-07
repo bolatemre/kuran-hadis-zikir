@@ -47,6 +47,8 @@ echo "--- CapApp-SPM/Package.swift ---"; cat ios/App/CapApp-SPM/Package.swift ||
 echo "--- packageClassList ---"; grep -A6 packageClassList ios/App/App/capacitor.config.json || true
 grep -q "LocalNotificationsPlugin" ios/App/App/capacitor.config.json || { echo "::error::Bildirim eklentisi packageClassList'te yok"; exit 1; }
 npx @capacitor/assets generate --ios --iconBackgroundColor "#0f3d2e" --splashBackgroundColor "#0f3d2e"
+# Bildirim sesleri (kısa ezan, zil, sessiz): uygulama paketine kopyalanır, aşağıda Xcode hedefine eklenir
+if ls sesler/*.wav >/dev/null 2>&1; then cp sesler/*.wav ios/App/App/; else echo "::warning::Bildirim sesleri bulunamadı; bildirimler varsayılan sesle çalar"; fi
 echo "::endgroup::"
 
 echo "::group::Info.plist"
@@ -112,6 +114,17 @@ TEAM_ID="$TEAM_ID" BUNDLE_ID="$BUNDLE_ID" PROFILE_NAME="$PROFILE_NAME" ruby -e '
     s["CODE_SIGN_IDENTITY"]="Apple Distribution"; s["CODE_SIGN_IDENTITY[sdk=iphoneos*]"]="Apple Distribution"
     s["PROVISIONING_PROFILE_SPECIFIER"]=ENV["PROFILE_NAME"]; s["PRODUCT_BUNDLE_IDENTIFIER"]=ENV["BUNDLE_ID"]
     s["TARGETED_DEVICE_FAMILY"]="1"  # sadece iPhone (iPad ekran görüntüsü gerekmez)
+  end
+  # Bildirim sesleri uygulama paketine (Copy Bundle Resources)
+  begin
+    g=p.main_group.children.find{|x| x.display_name=="App"} or raise("App grubu yok")
+    Dir.glob("App/*.wav").sort.each do |f|
+      ad=File.basename(f)
+      next if g.files.any?{|x| x.path==ad}
+      t.resources_build_phase.add_file_reference(g.new_reference(ad)); puts "Ses eklendi: #{ad}"
+    end
+  rescue => e
+    puts "::warning::Bildirim sesleri Xcode projesine eklenemedi: #{e}"
   end
   p.save; puts "İmza ayarları yazıldı"'
 echo "::endgroup::"

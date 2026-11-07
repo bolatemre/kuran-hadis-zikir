@@ -20,6 +20,13 @@ rm -rf android
 npx cap add android
 npx cap copy android
 npx @capacitor/assets generate --android --iconBackgroundColor "#0f3d2e" --splashBackgroundColor "#0f3d2e"
+# Bildirim sesleri (kısa ezan, zil, sessiz) → res/raw (bildirim kanalları bu adlarla kurulur)
+if ls sesler/*.wav >/dev/null 2>&1; then
+  mkdir -p android/app/src/main/res/raw
+  cp sesler/*.wav android/app/src/main/res/raw/
+  printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@raw/ezan_kisa,@raw/nur_zil,@raw/sessiz" />' > android/app/src/main/res/raw/keep.xml
+  ls -la android/app/src/main/res/raw
+else echo "::warning::Bildirim sesleri bulunamadı; bildirimler telefonun varsayılan sesiyle çalar"; fi
 # Google Play: en az Android 7.0 (SDK 24), hedef API 36 (Android 16) şartı
 sed -i -E "s/minSdkVersion = [0-9]+/minSdkVersion = 24/; s/compileSdkVersion = [0-9]+/compileSdkVersion = 36/; s/targetSdkVersion = [0-9]+/targetSdkVersion = 36/" android/variables.gradle
 grep -nE "minSdkVersion|compileSdkVersion|targetSdkVersion" android/variables.gradle

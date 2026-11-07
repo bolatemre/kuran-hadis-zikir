@@ -78,9 +78,10 @@ function kuranCalar(m, n, ayetSayisi, o = {}) {
   const bar = document.createElement('div'); bar.id = 'calar'; bar.hidden = true; document.body.appendChild(bar);
   temizlik.push(() => { Calar.durdur(); bar.remove(); document.querySelectorAll('.ayet.caliyor').forEach(e => e.classList.remove('caliyor')); });
   let tekrar = oku('sesTekrar', 1), araVer = oku('sesAra', false);
-  const isaretle = a => {
-    m.querySelectorAll('.ayet.caliyor').forEach(e => e.classList.remove('caliyor'));
-    const el = $('#a' + a, m); if (!el) return; el.classList.add('caliyor');
+  // o.ayetler verilirse (sayfa sayfa okuma) birden çok sûreye yayılan [sûre, âyet] listesi çalınır
+  const isaretle = x => {
+    m.querySelectorAll('.caliyor').forEach(e => e.classList.remove('caliyor'));
+    const el = $(o.ayetler ? `#a${x.s}_${x.a}` : '#a' + x.a, m); if (!el) return; el.classList.add('caliyor');
     const r = el.getBoundingClientRect(), mr = m.getBoundingClientRect();
     if (r.top < mr.top + 10 || r.bottom > mr.bottom - 120) m.scrollTop += r.top - mr.top - 70;
   };
@@ -92,19 +93,22 @@ function kuranCalar(m, n, ayetSayisi, o = {}) {
         <button id="c-ara" class="cip ${araVer ? 'acik' : ''}">Tekrar için bekle</button></div></div>
       <button id="c-kapat" class="c-kapat" aria-label="Kapat">✕</button>`;
     $('#c-oynat').onclick = () => { if (Calar.calisiyor) Calar.duraklat(); else Calar.devam(); ciz(); };
-    $('#c-kapat').onclick = () => { Calar.durdur(); bar.hidden = true; m.style.paddingBottom = ''; m.querySelectorAll('.ayet.caliyor').forEach(e => e.classList.remove('caliyor')); };
-    $('#c-kari').onchange = e => { yaz('kari', e.target.value); const a = Math.max(1, aktif); basla(a); };
+    $('#c-kapat').onclick = () => { Calar.durdur(); bar.hidden = true; m.style.paddingBottom = ''; m.querySelectorAll('.caliyor').forEach(e => e.classList.remove('caliyor')); };
+    $('#c-kari').onchange = e => { yaz('kari', e.target.value); basla(aktif); };
     $('#c-tekrar').onchange = e => { tekrar = +e.target.value; yaz('sesTekrar', tekrar); Calar.ayar({ tekrar }); };
     $('#c-ara').onclick = () => { araVer = !araVer; yaz('sesAra', araVer); Calar.ayar({ araVer }); $('#c-ara').classList.toggle('acik', araVer); toast(araVer ? 'Her âyetten sonra tekrar etmeniz için bekler' : 'Kesintisiz okur'); };
   };
-  let aktif = 1;
+  let aktif = { s: n, a: 1 };
   const basla = (a = 1) => {
+    const bas = typeof a === 'object' ? a : { s: n, a };
     bar.hidden = false; m.style.paddingBottom = '150px';
-    const l = []; for (let x = a; x <= ayetSayisi; x++) l.push([n, x]);
-    Calar.baslat(ayetListesi(l, null, a === 1), {
+    let l = [];
+    if (o.ayetler) { const i = o.ayetler.findIndex(y => y[0] === bas.s && y[1] === bas.a); l = o.ayetler.slice(Math.max(0, i)); }
+    else for (let x = bas.a; x <= ayetSayisi; x++) l.push([n, x]);
+    Calar.baslat(ayetListesi(l, null, true), {
       tekrar, araVer,
-      parca: (i, x) => { aktif = x.a || 1; isaretle(aktif); const y = $('#c-yazi'); if (y) y.textContent = x.a ? `${x.a}. âyet · ${KARILER[oku('kari', 'alafasy')][0]}` : 'Besmele'; const b = $('#c-oynat'); if (b) b.textContent = '❚❚'; },
-      bekliyor: () => { const y = $('#c-yazi'); if (y) y.textContent = `${aktif}. âyet · şimdi siz tekrar edin…`; },
+      parca: (i, x) => { aktif = { s: x.s || n, a: x.a || 1 }; isaretle(aktif); const y = $('#c-yazi'); if (y) y.textContent = x.a ? `${o.ayetler ? sureAdi(x.s) + ' ' : ''}${x.a}. âyet · ${KARILER[oku('kari', 'alafasy')][0]}` : 'Besmele'; const b = $('#c-oynat'); if (b) b.textContent = '❚❚'; },
+      bekliyor: () => { const y = $('#c-yazi'); if (y) y.textContent = `${aktif.a}. âyet · şimdi siz tekrar edin…`; },
       bitti: () => { ciz(); if (o.bitti) o.bitti(); },
       hata: () => ciz(),
     });
@@ -527,7 +531,9 @@ function sKabir(m) {
         <button class="cip dinle" data-dosya="kabir${i}" data-metin="${esc(k.s + ' ' + k.c)}">▶ Dinle</button></div>`).join('')}
       <div class="kart"><h2>Âyet</h2><p style="margin:0">“Allah, iman edenleri dünya hayatında da ahirette de sağlam söz üzere sabit kılar.”</p><div class="kaynak">İbrâhîm, 27 · Peygamberimiz bu âyetin kabirde sorgu hakkında indiğini bildirmiştir (Buhârî, Cenâiz).</div></div>
       <button class="btn tam ${ez.has('kabir') ? '' : 'ana'}" id="kb-ez">${ez.has('kabir') ? '✓ Ezberledim (geri al)' : 'Ezberledim ✓'}</button>
+      <div class="kart" style="margin-top:12px"><h2>Her gün hatırlat</h2>${hatirlatmaSatiri('olumBildirim', 'Ölümü hatırla bildirimi', 'İstediğin saatte: “Ey insanoğlu! Ölüm var.”', OLUM_VARSAYILAN)}</div>
       <div class="kart dua-kart" style="margin-top:12px"><p style="margin:0">Allah’ım! Bizi Müslüman olarak yaşat, Müslüman olarak vefat ettir ve salih kullarının arasına kat. Âmin.</p></div>`;
+    hatirlatmaBagla(m);
     $('#kb-ac').onclick = () => { yaz('kabirGizle', false); ciz(); };
     $('#kb-gizle').onclick = () => { yaz('kabirGizle', true); ciz(); };
     m.querySelectorAll('.cevap.kapali').forEach(c => c.onclick = () => c.classList.remove('kapali'));
