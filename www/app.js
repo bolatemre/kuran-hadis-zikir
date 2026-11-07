@@ -183,40 +183,45 @@ async function bildirimPlanla() {
     if (eski.length) await LN.cancel({ notifications: eski.map(n => ({ id: n.id })) });
     let izin = false; try { izin = (await LN.checkPermissions()).display === 'granted'; } catch (e) {}
     if (!izin) return;
-    const a = bildirimAyar();
-    const liste = [], simdi = new Date(), ad = konumAdi();
-    for (let g = 0; a.acik && g < 8 && liste.length < 46; g++) {
+    await kanallariKur(LN);
+    const a = bildirimAyar(), simdi = new Date(), ad = konumAdi(), genel = genelKanal(), diger = [];
+    // Cuma gecesi: perşembe akşam ezanından 20 dakika sonra
+    if (oku('cumaBildirim', true)) for (let g = 0, n = 0; g < 15 && n < 2; g++) {
+      const gun = new Date(simdi); gun.setDate(gun.getDate() + g); if (gun.getDay() !== 4) continue;
+      const at = new Date(gunVakitleri(gun).v[4].getTime() + 20 * 60e3); if (at <= simdi) continue;
+      diger.push({ id: 3100 + n++, title: 'Bu gece Cuma gecesi 🌙', body: 'Yâsîn, Tebâreke, Amme ve Cuma sûrelerini birlikte okuyalım. Okuyamıyorsan uygulamadan dinleyebilirsin.', schedule: { at, allowWhileIdle: true }, extra: { git: 'cuma' }, ...genel });
+    }
+    // Kandil ve bayramlar için o günün sabahı 10:00'da hatırlatma
+    yaklasanGunler(7).filter(x => x.tur !== 'gun' || /Ramazan Başlangıcı|Aşure|Hicrî/.test(x.ad)).slice(0, 5).forEach((x, i) => {
+      const [y, mo, d] = x.tarih.split('-').map(Number), at = new Date(y, mo - 1, d, 10, 0); if (at <= simdi) return;
+      diger.push({ id: 2000 + i, title: x.ad, body: x.tur === 'kandil' ? `Bu akşam ${x.ad}. Kandiliniz mübarek olsun.` : `Bugün ${x.ad}.`, schedule: { at, allowWhileIdle: true }, ...genel });
+    });
+    // Hatim halkası, ölümü hatırla ve "Bugün Allah için ne yaptın?" (ek2.js)
+    diger.push(...ekBildirimler(simdi));
+    // Günün hadisi: öğle ezanından 30 dakika önce (ana sayfadaki hadisle aynı)
+    if (oku('hadisBildirim', true)) for (let g = 0; g < 5; g++) {
+      const gun = new Date(simdi); gun.setDate(gun.getDate() + g);
+      const at = new Date(gunVakitleri(gun).v[2].getTime() - 30 * 60e3); if (at <= simdi) continue;
+      const h = HADISLER[gunNo(gun) % HADISLER.length], metin = `${h[1]} (${h[2]})`;
+      diger.push({ id: 3000 + g, title: 'Günün Hadisi', body: metin, largeBody: metin, schedule: { at, allowWhileIdle: true }, extra: { git: 'hadis' }, ...genel });
+    }
+    // Ezan bildirimleri: iOS en fazla 64 bekleyen bildirim tutar; kalan yer vakitlere (en az 24), seçilen sesle
+    const sinir = Math.min(46, Math.max(24, 62 - diger.length)), ses = vakitSesi(), liste = [];
+    for (let g = 0; a.acik && g < 8 && liste.length < sinir; g++) {
       const gun = new Date(simdi); gun.setDate(gun.getDate() + g);
       gunVakitleri(gun).v.forEach((t, i) => {
         if (!a.vakitler[i]) return;
-        const at = new Date(t.getTime() - a.once * 60e3); if (at <= simdi || liste.length >= 46) return;
+        const at = new Date(t.getTime() - a.once * 60e3); if (at <= simdi || liste.length >= sinir) return;
         const vakitAd = VAKIT_ADLARI[i];
         liste.push({
           id: 1000 + g * 10 + i,
           title: a.once ? `${vakitAd} vaktine ${a.once} dakika` : (i === 1 ? 'Güneş doğdu' : `${vakitAd} vakti`),
           body: a.once ? `${ad} için ${vakitAd.toLocaleLowerCase('tr')} vakti ${saatYaz(t)}'de giriyor.` : (i === 1 ? `${ad}: Kerahat vakti, güneş doğuşu ${saatYaz(t)}.` : `${ad} için ${vakitAd.toLocaleLowerCase('tr')} vakti girdi (${saatYaz(t)}).`),
-          schedule: { at, allowWhileIdle: true }
+          schedule: { at, allowWhileIdle: true }, ...ses
         });
       });
     }
-    // Günün hadisi: öğle ezanından 30 dakika önce (ana sayfadaki hadisle aynı)
-    if (oku('hadisBildirim', true)) for (let g = 0; g < 7; g++) {
-      const gun = new Date(simdi); gun.setDate(gun.getDate() + g);
-      const at = new Date(gunVakitleri(gun).v[2].getTime() - 30 * 60e3); if (at <= simdi) continue;
-      const h = HADISLER[gunNo(gun) % HADISLER.length], metin = `${h[1]} (${h[2]})`;
-      liste.push({ id: 3000 + g, title: 'Günün Hadisi', body: metin, largeBody: metin, schedule: { at, allowWhileIdle: true }, extra: { git: 'hadis' } });
-    }
-    // Cuma gecesi: perşembe akşam ezanından 20 dakika sonra
-    if (oku('cumaBildirim', true)) for (let g = 0, n = 0; g < 15 && n < 2; g++) {
-      const gun = new Date(simdi); gun.setDate(gun.getDate() + g); if (gun.getDay() !== 4) continue;
-      const at = new Date(gunVakitleri(gun).v[4].getTime() + 20 * 60e3); if (at <= simdi) continue;
-      liste.push({ id: 3100 + n++, title: 'Bu gece Cuma gecesi 🌙', body: 'Yâsîn, Tebâreke, Amme ve Cuma sûrelerini birlikte okuyalım. Okuyamıyorsan uygulamadan dinleyebilirsin.', schedule: { at, allowWhileIdle: true }, extra: { git: 'cuma' } });
-    }
-    // Kandil ve bayramlar için o günün sabahı 10:00'da hatırlatma
-    yaklasanGunler(7).filter(x => x.tur !== 'gun' || /Ramazan Başlangıcı|Aşure|Hicrî/.test(x.ad)).slice(0, 5).forEach((x, i) => {
-      const [y, mo, d] = x.tarih.split('-').map(Number), at = new Date(y, mo - 1, d, 10, 0); if (at <= simdi) return;
-      liste.push({ id: 2000 + i, title: x.ad, body: x.tur === 'kandil' ? `Bu akşam ${x.ad}. Kandiliniz mübarek olsun.` : `Bugün ${x.ad}.`, schedule: { at, allowWhileIdle: true } });
-    });
+    liste.push(...diger);
     if (liste.length) await LN.schedule({ notifications: liste.slice(0, 62) });
   } catch (e) { console.warn('bildirim', e); }
 }
@@ -267,6 +272,7 @@ function sBugun(m) {
       <button id="h-imsakiye"><span class="h-ikon">🌙</span><b>İmsakiye</b><span>Ramazan</span></button>
     </div>
     <div id="cuma-kart"></div>
+    <button class="kart iyilik-ana" id="iyilik"><div><b>Bugün Allah için ne yaptın?</b><span id="iyilik-alt">Sadaka, yetim, akraba… bir iyilik ekle</span></div><span class="iy-sayi" id="iyilik-sayi">＋</span></button>
     <div class="kategori-baslik">Öğren ve yaşa</div>
     <div class="kesfet">
       <button id="k-namaz"><span class="k-ikon">🕌</span><b>Namaz Kılınışı</b><small>Resimli anlatım</small></button>
@@ -275,6 +281,15 @@ function sBugun(m) {
       <button id="k-kaza"><span class="k-ikon">📋</span><b>Kaza Takvimi</b><small id="k-kaza-alt">Namazlarını işaretle</small></button>
       <button id="k-cami"><span class="k-ikon">📍</span><b>Yakın Camiler</b><small>Yol tarifi</small></button>
       <button id="k-cuma"><span class="k-ikon">🌙</span><b>Cuma Gecesi</b><small>Yâsîn ve sûreler</small></button>
+    </div>
+    <div class="kategori-baslik">Birlikte ve ailece</div>
+    <div class="kesfet">
+      <button id="k-hatim"><span class="k-ikon">📖</span><b>Hatim Halkası</b><small>Haftada bir cüz</small></button>
+      <button id="k-kissa"><span class="k-ikon">🏡</span><b>Aile Sohbeti</b><small>Kıssadan hisse</small></button>
+      <button id="k-mushaf"><span class="k-ikon k-ar">ق</span><b>Sayfa Sayfa</b><small>Mushaf düzeni</small></button>
+      <button id="k-ilmihal"><span class="k-ikon">📗</span><b>İlmihal</b><small>Temel bilgiler</small></button>
+      <button id="k-zekat"><span class="k-ikon">💰</span><b>Zekât</b><small>Hesapla</small></button>
+      <button id="k-hadis"><span class="k-ikon k-ar">ﷺ</span><b>Hadisler</b><small>Seçme hadisler</small></button>
     </div>
     <div id="ozel-gun"></div>
     <div class="kart ayet-kart"><div class="sus">۞</div><h2>Günün Ayeti</h2><div id="ga">…</div></div>
@@ -318,6 +333,15 @@ function sBugun(m) {
   $('#k-cami').onclick = () => sayfa(sCamiler, 'Yakındaki Camiler');
   $('#k-cuma').onclick = () => sayfa(sCumaGecesi, 'Cuma Gecesi');
   $('#olum').onclick = () => sayfa(sKabir, 'Ölümü Hatırla');
+  $('#iyilik').onclick = () => sayfa(sIyilik, 'İyilik Defteri');
+  $('#k-hatim').onclick = () => sayfa(sHatimler, 'Hatim Halkası');
+  $('#k-kissa').onclick = () => sayfa(sKissalar, 'Aile Sohbeti');
+  $('#k-mushaf').onclick = () => sayfa(mm => sMushaf(mm), 'Kur\'an');
+  $('#k-ilmihal').onclick = () => sayfa(sIlmihal, 'İlmihal');
+  $('#k-zekat').onclick = () => sayfa(sZekat, 'Zekât Hesapla');
+  $('#k-hadis').onclick = () => sayfa(sHadisler, 'Hadis-i Şerifler');
+  const iyb = iyilikGunu(ymd(bugun)).s;
+  if (iyb.length) { $('#iyilik-sayi').textContent = iyb.length; $('#iyilik-alt').textContent = `Bugün ${iyb.length} iyilik yazdın. Allah kabul etsin 🤍`; $('#iyilik').classList.add('dolu'); }
   const kz = kazaVeri(); if (kz) { const [kl] = kz.gun[ymd(bugun)] || [0]; $('#k-kaza-alt').textContent = `Bugün ${[0, 1, 2, 3, 4, 5].filter(v => kl >> v & 1).length}/6 kılındı`; }
   const [os, ok_] = OLUM_HATIRLA[gn % OLUM_HATIRLA.length]; $('#olum-soz').innerHTML = `“${esc(os)}” <span class="kaynak">${esc(ok_)}</span>`;
   // Cuma gecesi kartı (perşembe ve cuma)
@@ -351,9 +375,11 @@ function sKuran(m) {
     const son = oku('sonOkunan', null), isr = oku('isaretler', []);
     let ust = '';
     if (son) ust += `<button class="kart" style="width:100%;text-align:left" id="devam"><h2>Kaldığın yer</h2>${esc(K[son.s - 1].ad)} Sûresi, ${son.a}. ayet</button>`;
+    ust += `<button class="kart mushaf-gir" id="mushaf"><span class="ar">ق</span><span><b>Sayfa sayfa oku</b><small>Mushaf düzeni, 604 sayfa${oku('sonSayfa', 0) ? ` · kaldığın sayfa ${oku('sonSayfa', 1)}` : ''}</small></span><span class="soluk">›</span></button>`;
     if (isr.length) ust += `<button class="btn tam" id="isr" style="margin-bottom:12px">★ Yer imleri (${isr.length})</button>`;
     $('#ust-kartlar').innerHTML = ust;
     if (son) $('#devam').onclick = () => sayfa(mm => sOku(mm, son.s, son.a), K[son.s - 1].ad);
+    $('#mushaf').onclick = () => sayfa(mm => sMushaf(mm), 'Kur\'an');
     if (isr.length) $('#isr').onclick = () => sayfa(sIsaretler, 'Yer İmleri');
     const listele = q => {
       const qq = trKucuk(q.trim());
@@ -407,13 +433,14 @@ function sOku(m, n, hedefAyet, o = {}) {
     const yenile = () => {
       m.innerHTML = `<div class="okuyucu-ayar">
           <button class="cip ${gor.ar ? 'acik' : ''}" id="g-ar">Arapça</button><button class="cip ${gor.tr ? 'acik' : ''}" id="g-tr">Meal</button>
-          <button class="cip" id="b-k">A−</button><button class="cip" id="b-b">A+</button><button class="cip dinle-cip" id="g-dinle">▶ Dinle</button></div>
-        ${n !== 1 && n !== 9 && gor.ar ? '<div class="besmele">بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيمِ</div>' : ''}
+          <button class="cip" id="b-k">A−</button><button class="cip" id="b-b">A+</button><button class="cip" id="g-sayfa">Sayfa</button><button class="cip dinle-cip" id="g-dinle">▶ Dinle</button></div>
+        ${n !== 1 && n !== 9 && gor.ar ? '<div class="besmele">بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيمِ</div>' : ''}
         ${s.v.map(ayetHtml).join('')}
         <div class="sure-gecis">${n > 1 ? `<button id="onceki">‹ ${esc(K[n - 2].ad)}</button>` : '<span></span>'}${n < 114 ? `<button id="sonraki">${esc(K[n].ad)} ›</button>` : ''}</div>
         ${o.cuma ? `<button class="btn ana tam" id="cuma-ok" style="margin-top:12px">✓ ${esc(s.ad)} Sûresini okudum</button>` : ''}
         <p class="kaynak" style="text-align:center">Meal: Diyanet İşleri Başkanlığı · Metin: Tanzil.net · Ses: EveryAyah.com</p>`;
       $('#g-dinle').onclick = () => calar.basla(enUstAyet());
+      $('#g-sayfa').onclick = () => sayfa(mm => sMushaf(mm, ayetSayfasi(n, enUstAyet())), 'Kur\'an');
       if ($('#cuma-ok')) $('#cuma-ok').onclick = () => { cumaOkundu(n); titres('HEAVY'); toast('Allah kabul etsin 🤲'); geri(); };
       $('#g-ar').onclick = () => { gor = { ...gor, ar: !gor.ar }; if (!gor.ar && !gor.tr) gor.tr = true; yaz('gorunum', gor); konumKoru(yenile); };
       $('#g-tr').onclick = () => { gor = { ...gor, tr: !gor.tr }; if (!gor.ar && !gor.tr) gor.ar = true; yaz('gorunum', gor); konumKoru(yenile); };
@@ -501,6 +528,7 @@ function sVakitler(m) {
         <button class="btn tam" id="gps">📍 Konumumu bul</button></div>
       <div class="kart"><h2>Ezan bildirimi</h2>
         <div class="ayar-satir"><span>Vakit girince haber ver</span><button class="anahtar ${ba.acik ? 'acik' : ''}" id="b-ac"></button></div>
+        <div class="ayar-satir" style="margin-top:10px"><span>Bildirim sesi</span><span class="hatirlat-sag"><select id="b-ses" class="cip">${Object.entries(BILDIRIM_SESLERI).map(([k, v]) => `<option value="${k}" ${ezanSesi() === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select><button class="cip" id="b-dinle" aria-label="Sesi dinle">▶</button></span></div>
         <div class="ayar-satir" style="margin-top:10px"><span>Ne zaman?</span><select id="b-once" class="cip">${[0, 5, 10, 15, 30, 45].map(x => `<option value="${x}" ${ba.once === x ? 'selected' : ''}>${x ? x + ' dk önce' : 'Tam vaktinde'}</option>`).join('')}</select></div>
         <p class="soluk" style="margin:10px 0 0">Hangi vakitler için bildirim geleceğini yukarıdaki 🔔 simgeleriyle seçebilirsiniz.</p>
         ${PLATFORM === 'android' ? '<button class="btn tam" id="tam-alarm">Bildirimler gecikiyorsa: tam zamanlı alarm izni</button>' : ''}</div>
@@ -518,6 +546,8 @@ function sVakitler(m) {
     $('#gps').onclick = () => konumBul(async () => { ciz2(); if (await diyanetGuncelle(true)) ciz2(); bildirimPlanla(); });
     $('#b-ac').onclick = async () => { const a = bildirimAyar(); if (!a.acik && !(await bildirimIzni())) { toast('Bildirim izni verilmedi. Telefon ayarlarından açabilirsiniz.'); return; }
       a.acik = !a.acik; yaz('bildirim', a); await bildirimPlanla(); toast(a.acik ? 'Ezan bildirimleri açıldı' : 'Ezan bildirimleri kapatıldı'); ciz2(); };
+    $('#b-ses').onchange = e => { yaz('ezanSesi', e.target.value); bildirimPlanla(); sesOnizle(e.target.value); };
+    $('#b-dinle').onclick = () => sesOnizle(ezanSesi());
     $('#b-once').onchange = e => { const a = bildirimAyar(); a.once = +e.target.value; yaz('bildirim', a); bildirimPlanla(); };
     m.querySelectorAll('[data-z]').forEach(b => b.onclick = async () => {
       const a = bildirimAyar(); if (!a.acik) { if (!(await bildirimIzni())) { toast('Bildirim izni verilmedi'); return; } a.acik = true; a.vakitler = [false, false, false, false, false, false]; }
@@ -588,11 +618,17 @@ function sDaha(m) {
       ${satir('d-elifba', 'ا', 'Elif-Bâ', 'Harfler ve harekeler, sesli')}
       ${satir('d-kogren', '📖', 'Kur\'an Okumayı Öğren', 'Hafızı dinle, tekrar et')}
       ${satir('d-kabir', '🌿', 'Ölümü Hatırla', 'Kabir sualleri')}
+      ${satir('d-ilmihal', '📗', 'İlmihal', 'İman, abdest, namaz, oruç, zekât, hac, kurban')}
+      ${satir('d-kissa', '🏡', 'Kıssadan Hisse · Aile Sohbeti', `${KISSALAR.length} hikâye ve hisseleri`)}
     </div>
     <div class="kategori-baslik">İbadet</div><div class="liste">
       ${satir('d-kaza', '📋', 'Kaza Takvimi', 'Kılınan ve kaza namazları')}
       ${satir('d-cuma', '🌙', 'Cuma Gecesi', 'Yâsîn, Tebâreke, Amme, Cuma')}
       ${satir('d-cami', '📍', 'Yakındaki Camiler', 'Haritada yol tarifi')}
+      ${satir('d-iyilik', '🤍', 'Bugün Allah İçin Ne Yaptın?', 'İyilik defteri ve yıllık takvim')}
+      ${satir('d-hatim', '📖', 'Hatim Halkası', 'Birlikte haftada bir hatim')}
+      ${satir('d-mushaf', 'ق', 'Sayfa Sayfa Kur\'an', 'Mushaf düzeninde 604 sayfa')}
+      ${satir('d-zekat', '💰', 'Zekât Hesapla', 'Nisap ve zekât miktarı')}
     </div>
     <div class="liste">
       ${satir('d-hadis', 'ﷺ', 'Hadis-i Şerifler', `${HADISLER.length} seçme hadis`)}
@@ -618,6 +654,12 @@ function sDaha(m) {
   $('#d-kogren').onclick = () => sayfa(sKuranOgren, 'Kur\'an Okumayı Öğren');
   $('#d-kabir').onclick = () => sayfa(sKabir, 'Ölümü Hatırla');
   $('#d-kaza').onclick = () => sayfa(sKaza, 'Kaza Takvimi');
+  $('#d-ilmihal').onclick = () => sayfa(sIlmihal, 'İlmihal');
+  $('#d-kissa').onclick = () => sayfa(sKissalar, 'Aile Sohbeti');
+  $('#d-iyilik').onclick = () => sayfa(sIyilik, 'İyilik Defteri');
+  $('#d-hatim').onclick = () => sayfa(sHatimler, 'Hatim Halkası');
+  $('#d-mushaf').onclick = () => sayfa(mm => sMushaf(mm), 'Kur\'an');
+  $('#d-zekat').onclick = () => sayfa(sZekat, 'Zekât Hesapla');
   $('#d-cuma').onclick = () => sayfa(sCumaGecesi, 'Cuma Gecesi');
   $('#d-cami').onclick = () => sayfa(sCamiler, 'Yakındaki Camiler');
   $('#d-hadis').onclick = () => sayfa(sHadisler, 'Hadis-i Şerifler');
@@ -667,18 +709,21 @@ function sAyarlar(m) {
   m.innerHTML = `<div class="kart"><h2>Görünüm</h2><div class="okuyucu-ayar">
       ${[['sistem', 'Telefona göre'], ['acik', 'Açık'], ['koyu', 'Koyu']].map(([k, a]) => `<button class="cip ${t === k ? 'acik' : ''}" data-t="${k}">${a}</button>`).join('')}</div></div>
     <div class="kart"><h2>Yazı boyutu</h2>
-      <div class="ar" style="text-align:center">بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيمِ</div><div class="meal" style="text-align:center">Rahmân ve Rahîm olan Allah'ın adıyla</div>
+      <div class="ar" style="text-align:center">بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيمِ</div><div class="meal" style="text-align:center">Rahmân ve Rahîm olan Allah'ın adıyla</div>
       <div class="zikir-alt" style="margin-top:10px"><button class="btn" id="kucult">A−</button><button class="btn" id="buyut">A+</button></div></div>
     <div class="kart"><h2>Bildirimler</h2>
       <div class="ayar-satir"><span>Günün hadisi<br><span class="soluk">Her gün öğle ezanından 30 dakika önce</span></span><button class="anahtar ${oku('hadisBildirim', true) ? 'acik' : ''}" data-bil="hadisBildirim"></button></div>
       <div class="ayar-satir" style="margin-top:12px"><span>Cuma gecesi hatırlatması<br><span class="soluk">Perşembe akşamı Yâsîn ve sûreler</span></span><button class="anahtar ${oku('cumaBildirim', true) ? 'acik' : ''}" data-bil="cumaBildirim"></button></div>
-      <p class="soluk" style="margin:10px 0 0">Ezan bildirimleri Vakitler sekmesinden ayarlanır.</p></div>
+      <div style="margin-top:12px">${hatirlatmaSatiri('iyilikBildirim', 'Bugün Allah için ne yaptın?', 'Her akşam iyilik defteri', IYILIK_VARSAYILAN)}</div>
+      <div style="margin-top:12px">${hatirlatmaSatiri('olumBildirim', 'Ölümü hatırla', '“Ey insanoğlu! Ölüm var.”', OLUM_VARSAYILAN)}</div>
+      <p class="soluk" style="margin:10px 0 0">Ezan bildirimleri ve ezan sesi Vakitler sekmesinden ayarlanır.</p></div>
     <div class="kart"><h2>Kur'an sesi (hafız)</h2><select class="sec" id="a-kari">${Object.entries(KARILER).map(([k, v]) => `<option value="${k}" ${k === oku('kari', 'alafasy') ? 'selected' : ''}>${esc(v[0])}</option>`).join('')}</select>
       <p class="soluk" style="margin:8px 0 0">Kur'an dinlemek için internet gerekir.</p></div>
     <div class="kart"><h2>Zikir sayaçları</h2><button class="btn tam" id="zs-sifir">Tüm zikir sayaçlarını sıfırla</button></div>`;
   m.querySelectorAll('[data-bil]').forEach(b => b.onclick = async () => { const k = b.dataset.bil, a = !oku(k, true);
     if (a && !(await bildirimIzni())) { toast('Bildirim izni verilmedi. Telefon ayarlarından açabilirsiniz.'); return; }
     yaz(k, a); b.classList.toggle('acik', a); bildirimPlanla(); });
+  hatirlatmaBagla(m);
   $('#a-kari').onchange = e => { yaz('kari', e.target.value); toast('Hafız seçildi'); };
   m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { yaz('tema', b.dataset.t); temaUygula(); m.querySelectorAll('[data-t]').forEach(x => x.classList.toggle('acik', x === b)); });
   $('#kucult').onclick = () => { yaz('arBoyut', Math.max(20, oku('arBoyut', 28) - 2)); yaz('trBoyut', Math.max(13, oku('trBoyut', 16) - 1)); boyutUygula(); };
@@ -687,9 +732,9 @@ function sAyarlar(m) {
 }
 function sHakkinda(m) {
   m.innerHTML = `<div class="kart dua-kart">
-      <div class="ar" style="text-align:center">رَبَّنَا تَقَبَّلْ مِنَّا إِنَّكَ أَنْتَ السَّمِيعُ الْعَلِيمُ</div>
+      <div class="ar" style="text-align:center">رَبَّنَا تَقَبَّلْ مِنَّا إِنَّكَ أَنْتَ السَّمِيعُ الْعَلِيمُ</div>
       <p class="soluk">“Rabbimiz! Bizden kabul buyur. Şüphesiz sen hakkıyla işitensin, hakkıyla bilensin.” (Bakara, 127)</p>
-      <p>Bu uygulama yalnızca Allah rızası için hazırlanmıştır. Hiçbir ücret istemiyoruz, üyelik yok, verileriniz telefonunuzdan çıkmaz.</p>
+      <p>Bu uygulama yalnızca Allah rızası için hazırlanmıştır. Hiçbir ücret istemiyoruz, üyelik yok. Verileriniz telefonunuzda kalır; yalnızca Hatim Halkası'na katılırsanız halkada görünecek adınız ve okuduğunuz cüzler halkadakilerle paylaşılır.</p>
       <p><b>Faydalandıysanız, uygulamayı hazırlayanlar, anne babaları, aileleri ve efradı için bir dua etmeniz bize yeter.</b></p>
       <p class="soluk">“Müslümanın, gıyabında kardeşine yaptığı dua kabul olunur. Başında görevli bir melek, ‘Âmin, aynısı sana da olsun’ der.” (Müslim, Zikir)</p></div>
     <div class="kategori-baslik">Bizi takip edin · İslam Penceresi</div>
@@ -699,7 +744,10 @@ function sHakkinda(m) {
       Kur'an-ı Kerîm Arapça metni ve Diyanet İşleri Başkanlığı meali: Tanzil.net (tanzil.net)<br>
       Namaz vakitleri, imsakiye ve hicri takvim: AlAdhan (aladhan.com), Diyanet İşleri Başkanlığı hesaplama yöntemi ve hicri takvimi; internet yokken adhan kütüphanesiyle (MIT) aynı yöntemle hesaplanır<br>
       Hadis tercümeleri: belirtilen hadis kaynaklarından seçilmiştir.<br>
-      Arapça yazı tipi: Amiri Quran (SIL Open Font License)</p></div>
+      Arapça yazı tipi: Amiri Quran (SIL Open Font License)<br>
+      Sayfa sayfa okumada sayfa ve cüz düzeni: Tanzil.net Quran Metadata (CC BY 3.0)<br>
+      Kur'an tilaveti: EveryAyah.com · Kısa ezan bildirim sesi: “Beautiful adhan”, Adam-synagda (freesound.org, CC0)<br>
+      İlmihal: Diyanet İşleri Başkanlığı İlmihali esas alınarak özetlenmiştir.</p></div>
     <p class="soluk" style="text-align:center">Üç Nur: Kuran Hadis Zikir · sürüm 1.0</p>`;
 }
 
@@ -721,6 +769,9 @@ if (NATIVE) {
   if (LN && LN.addListener) LN.addListener('localNotificationActionPerformed', e => {
     const git = e && e.notification && e.notification.extra && e.notification.extra.git;
     if (git === 'cuma') { sekme('bugun'); sayfa(sCumaGecesi, 'Cuma Gecesi'); }
+    else if (git === 'iyilik') { sekme('bugun'); sayfa(sIyilik, 'İyilik Defteri'); }
+    else if (git === 'olum') { sekme('bugun'); sayfa(sKabir, 'Ölümü Hatırla'); }
+    else if (git === 'hatim') { const kod = e.notification.extra.kod; sekme('bugun'); sayfa(sHatimler, 'Hatim Halkası'); if (kod) sayfa(mm => sHatim(mm, kod), 'Hatim Halkası'); }
     else if (git === 'hadis') { sekme('bugun'); setTimeout(() => { const el = $('#gh'); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 300); }
   });
 }
