@@ -129,6 +129,76 @@ TEAM_ID="$TEAM_ID" BUNDLE_ID="$BUNDLE_ID" PROFILE_NAME="$PROFILE_NAME" ruby -e '
   p.save; puts "İmza ayarları yazıldı"'
 echo "::endgroup::"
 
+echo "::group::Ana ekran araç takımı (widget)"
+# Namaz vakitleri + geri sayım araç takımı. Hata olursa proje hiç değiştirilmez, uygulama araç takımsız derlenir.
+if [ "${WIDGET:-1}" = 1 ] && [ -n "${WIDGET_PROFILE_NAME:-}" ]; then
+  rm -rf UcNurWidget && cp -R "$REPO/native/ios/UcNurWidget" UcNurWidget
+  cp "$REPO"/native/ios/App/*.swift App/
+  TEAM_ID="$TEAM_ID" WIDGET_PROFILE_NAME="$WIDGET_PROFILE_NAME" ruby -e '# encoding: utf-8
+  begin; require "xcodeproj"; rescue LoadError; Gem.paths=nil; require "xcodeproj"; end
+  begin
+    p=Xcodeproj::Project.open("App.xcodeproj")
+    app=p.targets.find{|x| x.name=="App"} or raise("App hedefi yok")
+    raise("UcNurWidget hedefi zaten var") if p.targets.any?{|x| x.name=="UcNurWidget"}
+    g=p.main_group.children.find{|x| x.display_name=="App"} or raise("App grubu yok")
+    # 1) Uygulama tarafı: veriyi paylaşılan anahtar zincirine yazan eklenti + eklentiyi tanıtan ekran
+    %w[WidgetVeriPlugin.swift AnaViewController.swift].each do |ad|
+      ref=g.files.find{|x| x.path==ad} || g.new_reference(ad)
+      app.source_build_phase.add_file_reference(ref, true)
+    end
+    # 2) Uygulamanın yetkileri: paylaşılan anahtar zinciri grubu
+    ent=nil; app.build_configurations.each{|c| ent ||= c.build_settings["CODE_SIGN_ENTITLEMENTS"]}
+    ent ||= "App/App.entitlements"
+    h=File.exist?(ent) ? Xcodeproj::Plist.read_from_path(ent) : {}
+    gr=h["keychain-access-groups"] || []
+    ["$(AppIdentifierPrefix)com.bolatemre.khz","$(AppIdentifierPrefix)com.bolatemre.khz.paylasim"].each{|x| gr << x unless gr.include?(x)}
+    h["keychain-access-groups"]=gr
+    app.build_configurations.each{|c| c.build_settings["CODE_SIGN_ENTITLEMENTS"]=ent}
+    # 3) Araç takımı hedefi
+    wt=p.new_target(:app_extension, "UcNurWidget", :ios, "16.0", nil, :swift)
+    wg=p.main_group.new_group("UcNurWidget", "UcNurWidget")
+    wt.source_build_phase.add_file_reference(wg.new_reference("UcNurWidget.swift"), true)
+    wg.new_reference("Info.plist"); wg.new_reference("UcNurWidget.entitlements")
+    # Swift, WidgetKit ve SwiftUI çerçevelerini kendisi bağlar; SDK sürümüne sabitlenmiş çerçeve yolları bırakılmaz
+    wt.frameworks_build_phase.files.to_a.each{|f| r=f.file_ref; wt.frameworks_build_phase.remove_build_file(f); r.remove_from_project if r}
+    wt.build_configurations.each do |c|
+      s=c.build_settings
+      s["PRODUCT_NAME"]="$(TARGET_NAME)"; s["PRODUCT_BUNDLE_IDENTIFIER"]="com.bolatemre.khz.widget"
+      s["INFOPLIST_FILE"]="UcNurWidget/Info.plist"; s["GENERATE_INFOPLIST_FILE"]="NO"
+      s["CODE_SIGN_ENTITLEMENTS"]="UcNurWidget/UcNurWidget.entitlements"
+      s["SWIFT_VERSION"]="5.0"; s["IPHONEOS_DEPLOYMENT_TARGET"]="16.0"; s["TARGETED_DEVICE_FAMILY"]="1"
+      s["SKIP_INSTALL"]="YES"; s["APPLICATION_EXTENSION_API_ONLY"]="YES"
+      s["LD_RUNPATH_SEARCH_PATHS"]=["$(inherited)","@executable_path/Frameworks","@executable_path/../../Frameworks"]
+      s["MARKETING_VERSION"]="1.0"; s["CURRENT_PROJECT_VERSION"]="1"
+      s["CODE_SIGN_STYLE"]="Manual"; s["DEVELOPMENT_TEAM"]=ENV["TEAM_ID"]
+      s["CODE_SIGN_IDENTITY"]="Apple Distribution"; s["CODE_SIGN_IDENTITY[sdk=iphoneos*]"]="Apple Distribution"
+      s["PROVISIONING_PROFILE_SPECIFIER"]=ENV["WIDGET_PROFILE_NAME"]
+    end
+    # 4) Araç takımını uygulamanın içine göm (PlugIns) ve önce onu derle
+    ph=app.new_copy_files_build_phase("Embed Foundation Extensions")
+    ph.symbol_dst_subfolder_spec=:plug_ins
+    bf=ph.add_file_reference(wt.product_reference, true)
+    bf.settings={"ATTRIBUTES"=>["RemoveHeadersOnCopy"]}
+    app.add_dependency(wt)
+    # 5) Ana ekran sınıfı: CAPBridgeViewController yerine eklentiyi tanıtan AnaViewController
+    sb="App/Base.lproj/Main.storyboard"
+    eski=File.read(sb)
+    yeni=eski.sub(/customClass="CAPBridgeViewController"\s+customModule="Capacitor"/, %q(customClass="AnaViewController" customModule="App" customModuleProvider="target"))
+    raise("Main.storyboard içinde CAPBridgeViewController bulunamadı") if yeni==eski
+    Xcodeproj::Plist.write_to_path(h, ent)
+    p.save
+    File.write(sb, yeni)
+    puts "Araç takımı projeye eklendi (#{ent})"
+  rescue => e
+    puts "::warning::Araç takımı eklenemedi, uygulama araç takımsız derlenecek: #{e}"
+    puts e.backtrace.first(3)
+  end'
+  grep -n "customClass" App/Base.lproj/Main.storyboard || true
+else
+  echo "Araç takımı atlandı"
+fi
+echo "::endgroup::"
+
 echo "::group::Arşivle"
 xcodebuild -project App.xcodeproj -scheme App -configuration Release \
   -destination 'generic/platform=iOS' \
@@ -147,7 +217,7 @@ cat > "$TMP/export.plist" <<PLIST
   <key>teamID</key><string>${TEAM_ID}</string>
   <key>signingStyle</key><string>manual</string>
   <key>signingCertificate</key><string>Apple Distribution</string>
-  <key>provisioningProfiles</key><dict><key>${BUNDLE_ID}</key><string>${PROFILE_NAME}</string></dict>
+  <key>provisioningProfiles</key><dict><key>${BUNDLE_ID}</key><string>${PROFILE_NAME}</string><key>${BUNDLE_ID}.widget</key><string>${WIDGET_PROFILE_NAME:-}</string></dict>
 </dict></plist>
 PLIST
 xcodebuild -exportArchive -archivePath "$TMP/App.xcarchive" \

@@ -27,6 +27,15 @@ if ls sesler/*.wav >/dev/null 2>&1; then
   printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@raw/ezan_kisa,@raw/nur_zil,@raw/sessiz" />' > android/app/src/main/res/raw/keep.xml
   ls -la android/app/src/main/res/raw
 else echo "::warning::Bildirim sesleri bulunamadı; bildirimler telefonun varsayılan sesiyle çalar"; fi
+# Ana ekran araç takımları (namaz vakitleri + geri sayım): Java sınıfları, görünümler ve manifest kayıtları
+MA=$(find android/app/src/main/java -name MainActivity.java | head -1)
+test -n "$MA" || { echo "::error::MainActivity.java bulunamadı"; exit 1; }
+JD=$(dirname "$MA")
+cp native/android/java/*.java "$JD/"
+cp -R native/android/res/. android/app/src/main/res/
+perl -0pi -e 's#</application>#    <receiver android:name=".VakitWidget" android:exported="false" android:label="\@string/widget_vakit_ad">\n            <intent-filter>\n                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>\n                <action android:name="android.intent.action.TIME_SET"/>\n                <action android:name="android.intent.action.TIMEZONE_CHANGED"/>\n            </intent-filter>\n            <meta-data android:name="android.appwidget.provider" android:resource="\@xml/widget_vakit_bilgi"/>\n        </receiver>\n        <receiver android:name=".VakitKucukWidget" android:exported="false" android:label="\@string/widget_kucuk_ad">\n            <intent-filter>\n                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>\n            </intent-filter>\n            <meta-data android:name="android.appwidget.provider" android:resource="\@xml/widget_kucuk_bilgi"/>\n        </receiver>\n    </application>#' android/app/src/main/AndroidManifest.xml
+grep -c "appwidget.provider" android/app/src/main/AndroidManifest.xml
+ls "$JD"
 # Google Play: en az Android 7.0 (SDK 24), hedef API 36 (Android 16) şartı
 sed -i -E "s/minSdkVersion = [0-9]+/minSdkVersion = 24/; s/compileSdkVersion = [0-9]+/compileSdkVersion = 36/; s/targetSdkVersion = [0-9]+/targetSdkVersion = 36/" android/variables.gradle
 grep -nE "minSdkVersion|compileSdkVersion|targetSdkVersion" android/variables.gradle
