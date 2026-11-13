@@ -1,0 +1,41 @@
+// Üç Nur — "Halkalar" (ruhuna hatim / Yâsîn, ortak zikir, dua halkası) için Firestore güvenlik kuralları.
+// Firebase konsolu > Firestore Database > Kurallar (Rules) sayfasında, mevcut kuralların içindeki
+// "match /hatimler/{...} { ... }" bloğunun hemen ALTINA (aynı hizaya) yapıştırın ve Yayınla'ya basın.
+// Mevcut hatim kurallarına dokunmayın.
+
+    match /halkalar/{kod} {
+      allow get: if request.auth != null;
+      allow create: if request.auth != null
+        && kod.matches('^[A-Z0-9]{6}$')
+        && request.resource.data.kuran == request.auth.uid
+        && request.resource.data.tur in ['ruh', 'zikir', 'dua']
+        && request.resource.data.ad is string && request.resource.data.ad.size() <= 80
+        && request.resource.data.aciklama is string && request.resource.data.aciklama.size() <= 400;
+      allow update: if request.auth != null
+        && resource.data.kuran == request.auth.uid
+        && request.resource.data.kuran == resource.data.kuran;
+      allow delete: if request.auth != null && resource.data.kuran == request.auth.uid;
+
+      // Herkes yalnızca kendi okuduğunu / duasını yazar
+      match /katki/{uid} {
+        allow read: if request.auth != null;
+        allow create, update: if request.auth != null && request.auth.uid == uid
+          && request.resource.data.ad is string && request.resource.data.ad.size() <= 40
+          && request.resource.data.n is int && request.resource.data.n >= 0 && request.resource.data.n <= 100000000;
+        allow delete: if request.auth != null && request.auth.uid == uid;
+      }
+
+      // Ruhuna hatimde cüzler: boş cüzü alan kişi sahibi olur; yalnızca sahibi değiştirir, sahibi ya da kurucu bırakır
+      match /parcalar/{no} {
+        allow read: if request.auth != null;
+        allow create, update: if request.auth != null
+          && no.matches('^(0[1-9]|[12][0-9]|30)$')
+          && request.resource.data.uid == request.auth.uid
+          && (resource == null || resource.data.uid == request.auth.uid)
+          && request.resource.data.ad is string && request.resource.data.ad.size() <= 40
+          && request.resource.data.ok is bool;
+        allow delete: if request.auth != null
+          && (resource.data.uid == request.auth.uid
+              || get(/databases/$(database)/documents/halkalar/$(kod)).data.kuran == request.auth.uid);
+      }
+    }
