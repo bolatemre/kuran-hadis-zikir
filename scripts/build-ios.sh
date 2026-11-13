@@ -9,6 +9,9 @@ BUNDLE_ID=com.bolatemre.khz
 BUILD_NUMBER="${BUILD_NUMBER:-1}"
 TMP="${RUNNER_TEMP:-/tmp}"
 REPO="$(pwd)"
+# App Store sürüm numarası (1.1, 1.2 …): onaylanan her sürümden sonra surum.txt içindeki sayı büyütülür
+SURUM="$(tr -d ' \n\r' < surum.txt 2>/dev/null || true)"; SURUM="${SURUM:-1.1}"
+echo "Sürüm: $SURUM ($BUILD_NUMBER)"
 
 echo "::group::Xcode 26 seç (App Store iOS 26 SDK istiyor)"
 XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
@@ -204,7 +207,7 @@ xcodebuild -project App.xcodeproj -scheme App -configuration Release \
   -destination 'generic/platform=iOS' \
   -archivePath "$TMP/App.xcarchive" archive \
   OTHER_CODE_SIGN_FLAGS="--keychain $KC" \
-  MARKETING_VERSION=1.0 CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
+  MARKETING_VERSION="$SURUM" CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 echo "::endgroup::"
 
 echo "::group::TestFlight'a yükle"
