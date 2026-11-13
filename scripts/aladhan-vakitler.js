@@ -99,4 +99,6 @@ function diniGunler(gunler) {
   }
   console.log(`Bitti: ${ok} il güncellendi, ${atla} il zaten güncel, ${hata} hata`);
   if (hata > 40) process.exit(1);
+  // Yakındaki camiler için hazır cami dosyaları (docs/vakitler/camiler): hata olursa vakitleri etkilemez, eski veri kalır
+  try { require('child_process').execSync(`node "${path.join(__dirname, 'camiler.js')}"`, { stdio: 'inherit', timeout: 18 * 60000 }); } catch (e) { console.log('::warning::Cami verisi güncellenemedi; eski veri korunuyor'); }
 })().catch(e => { console.error(e.message || e); process.exit(1); });
