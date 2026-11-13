@@ -1,6 +1,7 @@
 // Üç Nur — "Halkalar" (ruhuna hatim / Yâsîn, ortak zikir, dua halkası) için Firestore güvenlik kuralları.
 // Firebase konsolu > Firestore Database > Kurallar (Rules) sayfasında, mevcut kuralların içindeki
-// "match /hatimler/{...} { ... }" bloğunun hemen ALTINA (aynı hizaya) yapıştırın ve Yayınla'ya basın.
+// "match /hatimler/{...} { ... }" bloğunun bittiği yere, dosyanın en sonundaki iki } işaretinden ÖNCE yapıştırın ve Yayınla'ya basın.
+// Not: mevcut kurallarda veritabanı değişkeninin adı {db}; aşağıdaki get(...) satırı buna göre yazıldı.
 // Mevcut hatim kurallarına dokunmayın.
 
     match /halkalar/{kod} {
@@ -36,6 +37,6 @@
           && request.resource.data.ok is bool;
         allow delete: if request.auth != null
           && (resource.data.uid == request.auth.uid
-              || get(/databases/$(database)/documents/halkalar/$(kod)).data.kuran == request.auth.uid);
+              || get(/databases/$(db)/documents/halkalar/$(kod)).data.kuran == request.auth.uid);
       }
     }
