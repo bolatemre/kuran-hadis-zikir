@@ -85,7 +85,7 @@
 
   function sHalkaKur(m, tur) {
     const ben = `<label class="soluk">Sizin adınız (halkada görünecek)</label><input class="giris" id="hk-ben" maxlength="30" value="${esc(oku('hatimAd', ''))}" placeholder="Ör. Emre">`;
-    const form = tur === 'ruh' ? `<label class="soluk">Kimin için?</label><input class="giris" id="hk-kisi" maxlength="50" placeholder="Ör. Babam Ahmet Bolat">
+    const form = tur === 'ruh' ? `<label class="soluk">Kimin için?</label><input class="giris" id="hk-kisi" maxlength="50" placeholder="Ör. Babam Ahmet Yılmaz">
         <label class="soluk">Ne okunacak?</label><select class="sec" id="hk-ne">${RUH_SECENEK.map(x => `<option value="${x[0]}">${x[1]}</option>`).join('')}</select>
         <div id="hk-hedef-kutu" hidden><label class="soluk">Kaç tane okunsun?</label><input class="giris" id="hk-hedef" inputmode="numeric" maxlength="7" value="41"></div>
         <label class="soluk">Not (isteğe bağlı)</label><input class="giris" id="hk-not" maxlength="200" placeholder="Ör. 40. gecesi 12 Aralık’ta dua edilecek">`
