@@ -24,7 +24,8 @@ npx @capacitor/assets generate --android --iconBackgroundColor "#0f3d2e" --splas
 if ls sesler/*.wav >/dev/null 2>&1; then
   mkdir -p android/app/src/main/res/raw
   cp sesler/*.wav android/app/src/main/res/raw/
-  printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@raw/ezan_kisa,@raw/nur_zil,@raw/sessiz" />' > android/app/src/main/res/raw/keep.xml
+  cp sesler/*.mp3 android/app/src/main/res/raw/ 2>/dev/null || true
+  printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@raw/ezan_kisa,@raw/ezan_uzun,@raw/ezan_tam,@raw/nur_zil,@raw/sessiz" />' > android/app/src/main/res/raw/keep.xml
   ls -la android/app/src/main/res/raw
 else echo "::warning::Bildirim sesleri bulunamadı; bildirimler telefonun varsayılan sesiyle çalar"; fi
 # Ana ekran araç takımları (namaz vakitleri + geri sayım): Java sınıfları, görünümler ve manifest kayıtları

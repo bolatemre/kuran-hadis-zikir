@@ -1,4 +1,5 @@
-# Bildirim sesleri: sesler/ezan_kisa.wav (kısa ezan), sesler/nur_zil.wav (yumuşak zil), sesler/sessiz.wav
+# Bildirim sesleri: sesler/ezan_kisa.wav (kısa ezan), ezan_uzun.wav (iOS sınırı: ~29 sn), ezan_tam.mp3 (tam ezan, yalnız Android),
+# sesler/nur_zil.wav (yumuşak zil), sesler/sessiz.wav
 # iOS ve Android bildirim sesi olarak WAV (16 bit PCM) kullanılır; iOS'ta en fazla 30 saniye olmalı.
 # Kısa ezan: "Beautiful adhan" — Adam-synagda (freesound.org, CC0 / kamu malı). İlk "Allâhu Ekber, Allâhu Ekber" kısmı alınır.
 import io, math, os, struct, sys, urllib.request, hashlib, time, wave
@@ -29,8 +30,10 @@ def zil():
             s[b + i] += zarf * (math.sin(2 * math.pi * f * t) + 0.35 * math.sin(2 * math.pi * f * 2.01 * t) * math.exp(-t * 3) + 0.12 * math.sin(2 * math.pi * f * 3.02 * t) * math.exp(-t * 5))
     return s
 
-def ezan():
-    import miniaudio
+EZAN_VERI = None
+def ezan_indir():
+    global EZAN_VERI
+    if EZAN_VERI: return EZAN_VERI
     veri = None
     for d in range(4):
         try:
@@ -40,8 +43,12 @@ def ezan():
             print('  ezan indirilemedi, tekrar:', e); time.sleep(5 * (d + 1))
     if not veri: raise RuntimeError('ezan indirilemedi')
     if hashlib.sha256(veri).hexdigest() != EZAN_SHA: raise RuntimeError('ezan dosyası beklenen dosya değil')
-    c = miniaudio.decode(veri, output_format=miniaudio.SampleFormat.FLOAT32, nchannels=1, sample_rate=HZ)
-    s = list(c.samples[:int(EZAN_SN * HZ)])
+    EZAN_VERI = veri; return veri
+
+def ezan(sn=EZAN_SN):
+    import miniaudio
+    c = miniaudio.decode(ezan_indir(), output_format=miniaudio.SampleFormat.FLOAT32, nchannels=1, sample_rate=HZ)
+    s = list(c.samples[:int(sn * HZ)])
     gir, cik = int(0.03 * HZ), int(1.4 * HZ)
     for i in range(gir): s[i] *= i / gir
     for i in range(cik): s[-1 - i] *= (i / cik) ** 1.5
@@ -56,3 +63,12 @@ try:
 except Exception as e:
     print('::warning::Kısa ezan hazırlanamadı (' + str(e) + '); yerine zil sesi kullanılacak')
     yaz('ezan_kisa.wav', z)
+try:
+    yaz('ezan_uzun.wav', ezan(29.0))  # iOS bildirim sesi en fazla 30 sn olabilir
+except Exception as e:
+    print('::warning::Uzun ezan hazırlanamadı (' + str(e) + ')')
+try:
+    with open(os.path.join(OUT, 'ezan_tam.mp3'), 'wb') as f: f.write(ezan_indir())  # Android kanalı tamamını çalar
+    print('  ezan_tam.mp3: tam ezan')
+except Exception as e:
+    print('::warning::Tam ezan hazırlanamadı (' + str(e) + ')')

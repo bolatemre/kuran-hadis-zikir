@@ -22,5 +22,5 @@ if (process.env.GITHUB_ACTIONS) {
 // Ayarlar'da önizleme için bildirim seslerinin bir kopyası
 if (fs.existsSync(path.join(R, 'sesler'))) {
   fs.mkdirSync(www('bildirim'), { recursive: true });
-  for (const f of fs.readdirSync(path.join(R, 'sesler'))) if (f.endsWith('.wav')) fs.copyFileSync(path.join(R, 'sesler', f), www('bildirim/' + f));
+  for (const f of fs.readdirSync(path.join(R, 'sesler'))) if (/\.(wav|mp3)$/.test(f)) fs.copyFileSync(path.join(R, 'sesler', f), www('bildirim/' + f));
 }
