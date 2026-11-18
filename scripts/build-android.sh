@@ -44,14 +44,15 @@ SDKM=$(ls -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/cmdline-tools/*/bin/sdkmanager
 if [ ! -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/platforms/android-36" ] && [ -n "$SDKM" ]; then yes | "$SDKM" "platforms;android-36" >/dev/null || true; fi
 ls "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/platforms" | tail -3
 G=android/app/build.gradle
-sed -i -E "s/versionCode [0-9]+/versionCode ${BUILD_NUMBER}/; s/versionName \"[^\"]*\"/versionName \"1.0.${BUILD_NUMBER}\"/" "$G"
+SURUM=$(tr -d ' \r\n' < surum.txt 2>/dev/null || true); SURUM=${SURUM:-1.0}
+sed -i -E "s/versionCode [0-9]+/versionCode ${BUILD_NUMBER}/; s/versionName \"[^\"]*\"/versionName \"${SURUM}\"/" "$G"
 perl -0pi -e 's/<activity(\s)/<activity android:screenOrientation="portrait"$1/' android/app/src/main/AndroidManifest.xml
 # AdMob (ödüllü reklam) uygulama kimliği
 source scripts/ads.env
 perl -0pi -e "s#(<application[^>]*>)#\$1\n        <meta-data android:name=\"com.google.android.gms.ads.APPLICATION_ID\" android:value=\"$ADMOB_ANDROID_APP_ID\"/>#" android/app/src/main/AndroidManifest.xml
 grep -n "APPLICATION_ID" android/app/src/main/AndroidManifest.xml
 # Ezan bildirimleri tam vaktinde gelsin (Android 12+): tam zamanlı alarm izni
-perl -0pi -e 's#(<manifest[^>]*>)#$1\n    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>#' android/app/src/main/AndroidManifest.xml
+perl -0pi -e 's#(<manifest[^>]*>)#$1\n    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-feature android:name="android.hardware.screen.portrait" android:required="false"/>\n    <uses-feature android:name="android.hardware.location" android:required="false"/>\n    <uses-feature android:name="android.hardware.location.gps" android:required="false"/>\n    <uses-feature android:name="android.hardware.location.network" android:required="false"/>#' android/app/src/main/AndroidManifest.xml
 grep -E "versionCode|versionName" "$G"
 echo "::endgroup::"
 
