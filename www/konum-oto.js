@@ -11,12 +11,21 @@
     if (a !== null) return a;
     const k = konum(); return k.tip === 'gps' || k.tip === 'ilce'; // GPS ile bulunmuş konumlarda varsayılan açık
   }
+  // Telefonda yerel konum eklentisi: izin durumu güvenilir okunur, iPhone'da tekrar izin penceresi çıkmaz
+  const G = () => (NATIVE ? eklenti('Geolocation') : null);
   async function izinVar() {
+    const g = G();
+    if (g && g.checkPermissions) try { const d = await g.checkPermissions(); return d.location === 'granted' || d.coarseLocation === 'granted'; } catch (e) {}
     if (!navigator.geolocation) return false;
     try { if (navigator.permissions && navigator.permissions.query) return (await navigator.permissions.query({ name: 'geolocation' })).state === 'granted'; } catch (e) {}
     return PLATFORM === 'android'; // izin durumu sorulamıyorsa iOS'ta pencere çıkmasın diye hiç denemeyiz
   }
-  const konumAl = () => new Promise((tamam, hata) => navigator.geolocation.getCurrentPosition(tamam, hata, { timeout: 15000, maximumAge: 10 * 60e3, enableHighAccuracy: false }));
+  const AYAR = { timeout: 15000, maximumAge: 5 * 60e3, enableHighAccuracy: false };
+  const konumAl = async () => {
+    const g = G();
+    if (g && g.getCurrentPosition) try { return await g.getCurrentPosition(AYAR); } catch (e) {}
+    return new Promise((tamam, hata) => navigator.geolocation.getCurrentPosition(tamam, hata, AYAR));
+  };
 
   async function kontrol(zorla) {
     if (calisiyor || !acikMi() || (!zorla && Date.now() - son < ARALIK)) return;
